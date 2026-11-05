@@ -73,8 +73,9 @@ header.top .clock{font-size:12px;color:var(--muted);line-height:1.35;margin-top:
 .seg button.on{background:rgba(242,238,226,.95);color:#13201b;font-weight:700}
 .trio{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px}
 .trio div{background:var(--field);border-radius:14px;padding:10px 11px;min-width:0}
-.trio small{display:block;font-size:12px;color:var(--muted)}
-.trio b{display:block;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.trio small{display:block;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.trio b{display:block;font-size:clamp(12.5px,4.1vw,15px);letter-spacing:-.2px;white-space:nowrap;overflow:hidden;text-overflow:clip}
+.notecard .trio div{padding:10px 8px 10px 10px}
 .notecard .trio div{background:rgba(255,255,255,.07)}
 .notecard .trio small{color:rgba(242,238,226,.65)}
 .notecard .trio .in{color:var(--in-on-note)} .notecard .trio .out{color:var(--out-on-note)}
@@ -297,12 +298,12 @@ section[data-page]{display:none} section[data-page].on{display:block}
       <div class="nc-top"><span class="nc-label">현재 남은 금액</span><span class="nc-cad">CAD</span></div>
       <div class="big num" id="balance">$0.00</div>
       <div class="seg" id="periodSeg">
-        <button data-p="day" class="on">오늘</button><button data-p="week">이번 주</button><button data-p="month">이번 달</button>
+        <button data-p="all" class="on">전체</button><button data-p="day">오늘</button><button data-p="week">이번 주</button><button data-p="month">이번 달</button>
       </div>
       <div class="trio">
-        <div><small>입금</small><b class="num in" id="pIn">$0</b></div>
-        <div><small>지출</small><b class="num out" id="pOut">$0</b></div>
-        <div><small>남은 금액</small><b class="num" id="pNet">$0</b></div>
+        <div><small id="pInL">전체 입금</small><b class="num in" id="pIn">$0</b></div>
+        <div><small id="pOutL">전체 지출</small><b class="num out" id="pOut">$0</b></div>
+        <div><small id="pNetL">남은 금액</small><b class="num" id="pNet">$0</b></div>
       </div>
     </div>
 
@@ -418,7 +419,7 @@ section[data-page]{display:none} section[data-page].on{display:block}
     </div>
   </section>
 
-  <p class="ver" id="verLine">오늘 얼마 썼어? v0.9.1</p>
+  <p class="ver" id="verLine">오늘 얼마 썼어? v0.9.2</p>
 </div>
 
 <nav class="tabs" id="tabs">

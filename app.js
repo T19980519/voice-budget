@@ -1,4 +1,4 @@
-/* 오늘 얼마 썼어? v0.9.1 — 모든 데이터는 이 폰(localStorage)에만 저장 */
+/* 오늘 얼마 썼어? v0.9.2 — 모든 데이터는 이 폰(localStorage)에만 저장 */
 (function () {
   'use strict';
   const P = window.VBParser;
@@ -206,18 +206,28 @@
   $('tabs').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) go(b.dataset.go); });
 
   // ---------- 홈 ----------
-  let homePeriod = 'day';
+  // 기본은 '전체'(지금까지 모든 입금·지출), 마지막에 고른 탭을 기억
+  const KEY_PERIOD = 'vb.homePeriod';
+  let homePeriod = 'all';
+  try { const v = localStorage.getItem(KEY_PERIOD); if (['all', 'day', 'week', 'month'].includes(v)) homePeriod = v; } catch (e) {}
+  const PERIOD_WORD = { all: '전체', day: '오늘', week: '이번 주', month: '이번 달' };
+  function syncPeriodSeg() {
+    $('periodSeg').querySelectorAll('button').forEach((x) => x.classList.toggle('on', x.dataset.p === homePeriod));
+    const w = PERIOD_WORD[homePeriod];
+    $('pInL').textContent = w + ' 입금'; $('pOutL').textContent = w + ' 지출'; $('pNetL').textContent = homePeriod === 'all' ? '남은 금액' : w + ' 남은 금액';
+  }
   $('periodSeg').addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b) return;
     homePeriod = b.dataset.p;
-    $('periodSeg').querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+    try { localStorage.setItem(KEY_PERIOD, homePeriod); } catch (e2) {}
     renderHome();
   });
   function renderHome() {
     const bal = balance();
     $('balance').textContent = money(bal);
     $('balance').classList.toggle('neg', bal < 0);
-    const t = totals(...range(homePeriod));
+    syncPeriodSeg();
+    const t = totals(...range(homePeriod === 'all' ? 'all' : homePeriod));
     const short = (n) => Math.abs(n) >= 1000 ? (n < 0 ? '-' : '') + '$' + Math.round(Math.abs(n)).toLocaleString('en-CA') : money(n);
     $('pIn').textContent = short(t.inn); $('pOut').textContent = short(t.out); $('pNet').textContent = short(t.net);
     const rec = records.slice(-6).reverse();
@@ -359,7 +369,7 @@
   function setupStatic() {
     $('askChips').innerHTML = CHIPS.map((c) => `<button>${esc(c)}</button>`).join('');
     $('fCategory').innerHTML = CATS.map((c) => `<option value="${c}">${esc(c)}</option>`).join('');
-    $('verLine').textContent = '오늘 얼마 썼어? v0.9.1' + (IS_PREVIEW ? ' · 미리보기 (기록은 이 화면에만 저장)' : '');
+    $('verLine').textContent = '오늘 얼마 썼어? v0.9.2' + (IS_PREVIEW ? ' · 미리보기 (기록은 이 화면에만 저장)' : '');
   }
 
   // ---------- 입력 시트 ----------
