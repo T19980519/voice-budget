@@ -1,10 +1,9 @@
-/* 오늘 얼마 썼어? v0.9.2 — 모든 데이터는 이 폰(localStorage)에만 저장 */
+/* 오늘 얼마 썼어? v0.9.3 — 모든 데이터는 이 폰(localStorage)에만 저장 */
 (function () {
   'use strict';
   const P = window.VBParser;
   const $ = (id) => document.getElementById(id);
   const KEY_REC = 'vb.records.v1', KEY_SET = 'vb.settings.v1', KEY_NOTI = 'vb.notified.v1';
-  const WAGE_NAME = '직장주급';
   const IS_PREVIEW = !!window.VB_PREVIEW; // claude.ai 미리보기 모드
   const CATS = ['커피', '식비', '장보기', '교통', '전자제품', '생활용품', '쇼핑', '통신/구독', '주거', '의료', '여가', '교육', '선물/경조사', '수입', '기타'];
 
@@ -18,10 +17,40 @@
   // ---------- 저장소 ----------
   const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch (e) { return d; } };
   const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { toast(T('저장 공간이 부족합니다')); } };
-  let records = load(KEY_REC, []);
-  const settings = Object.assign({ firstPay: '2026-11-04', payTime: '04:00', notifyTime: '21:00', weekStart: 1 }, load(KEY_SET, {}));
+  let allRecords = load(KEY_REC, []);          // 모든 통화의 기록
+  const settingsRaw = load(KEY_SET, null);
+  const settings = Object.assign({ firstPay: '2026-11-04', payTime: '04:00', notifyTime: '21:00', weekStart: 1 }, settingsRaw || {});
   delete settings.lang;
   if (!settings.budgets || typeof settings.budgets !== 'object') settings.budgets = {};
+  // ---------- 통화 (폰마다 하나: KRW 원 / USD 미국 달러 / CAD 캐나다 달러) ----------
+  const CURRENCIES = { KRW: '원 · KRW (대한민국)', USD: '달러 · USD (미국)', CAD: '달러 · CAD (캐나다)' };
+  function guessCurrency() {
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+      if (/Asia\/Seoul/.test(tz)) return 'KRW';
+      if (/America\/(Toronto|Vancouver|Edmonton|Winnipeg|Halifax|St_Johns|Regina|Montreal|Moncton|Whitehorse|Yellowknife|Iqaluit|Glace_Bay|Goose_Bay|Swift_Current|Dawson|Creston)/.test(tz)) return 'CAD';
+      if (/^America\//.test(tz) || /^Pacific\/Honolulu/.test(tz)) return 'USD';
+    } catch (e) {}
+    return /^ko/i.test(navigator.language || '') ? 'KRW' : 'CAD';
+  }
+  // 예전부터 쓰던 폰(기록·설정이 있음)은 캐나다 달러 그대로, 처음 쓰는 폰은 시간대로 추측
+  if (!CURRENCIES[settings.currency]) settings.currency = (allRecords.length || settingsRaw) ? 'CAD' : guessCurrency();
+  for (const r of allRecords) if (!r.cur) r.cur = 'CAD';
+  let records = allRecords.filter((r) => r.cur === settings.currency);   // 지금 통화의 기록만 화면·합계에 사용
+  P.setCurrency(settings.currency);
+  // ---------- 급여 (격주 / 매주 / 매달 N일 / 없음) ----------
+  if (!settings.payCycle) {
+    if (!settingsRaw && settings.currency === 'KRW') Object.assign(settings, { payCycle: 'monthly', payDay: 25, payName: '월급', payTime: '09:00' });
+    else settings.payCycle = 'biweekly';
+  }
+  if (!settingsRaw) {   // 처음 쓰는 날을 기억 (그 전 지급일은 묻지 않기)
+    const d = new Date(); settings.since = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    try { localStorage.setItem(KEY_SET, JSON.stringify(settings)); } catch (e) {}
+  }
+  if (!settings.payName) settings.payName = settings.payCycle === 'monthly' ? '월급' : '직장주급';
+  if (!(settings.payDay >= 0)) settings.payDay = 25;   // 0 = 말일
+  const payName = () => settings.payName || '급여';
+  const payItem = () => (settings.payCycle === 'monthly' ? '월급' : '주급');
   const KEY_LEARN = 'vb.learn.v1';
   const learn = Object.assign({ words: {}, cats: {}, phrases: {} }, load(KEY_LEARN, {}));
   P.setLearned(learn.words, learn.cats); P.setPhrases(learn.phrases);
@@ -53,7 +82,12 @@
     }
     return out.length >= 2 ? out : null;
   });
-  const saveRecords = () => { records.sort((a, b) => a.ts - b.ts); save(KEY_REC, records); };
+  const saveRecords = () => {
+    for (const r of records) if (!r.cur) r.cur = settings.currency;
+    records.sort((a, b) => a.ts - b.ts);
+    allRecords = allRecords.filter((r) => r.cur !== settings.currency).concat(records).sort((a, b) => a.ts - b.ts);
+    save(KEY_REC, allRecords);
+  };
   // 예전에 잘못 알아들어 저장된 말 바로잡기 (권도 → 콘도, 골 기지 → 모기지 …)
   (function fixOldRecords() {
     let changed = false;
@@ -99,7 +133,30 @@
   const fmtDate = (d) => `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()} (${DOW_KO[d.getDay()]})`;
   const fmtTime = (d) => { const h = d.getHours(), m = String(d.getMinutes()).padStart(2, '0'); return `${h < 12 ? '오전' : '오후'} ${h % 12 || 12}:${m}`; };
   const toLocalInput = (d) => `${dkey(d)}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-  const money = (n) => (n < 0 ? '-' : '') + '$' + Math.abs(n).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const isWon = () => settings.currency === 'KRW';
+  /** 45,670원 / $12.99 */
+  const money = (n) => {
+    const neg = n < 0 ? '-' : '', a = Math.abs(n);
+    if (isWon()) return neg + Math.round(a).toLocaleString('ko-KR') + '원';
+    return neg + '$' + a.toLocaleString(settings.currency === 'USD' ? 'en-US' : 'en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+  /** 좁은 칸용: 345만원, 1.2억원 / $1,850 */
+  const moneyShort = (n) => {
+    const neg = n < 0 ? '-' : '', a = Math.abs(n);
+    if (isWon()) {
+      if (a >= 1e8) return neg + (a / 1e8).toFixed(a >= 1e9 ? 0 : 1).replace(/\.0$/, '') + '억원';
+      if (a >= 1e6) return neg + Math.round(a / 1e4).toLocaleString('ko-KR') + '만원';
+      return money(n);
+    }
+    return a >= 1000 ? neg + '$' + Math.round(a).toLocaleString('en-CA') : money(n);
+  };
+  /** 차트 눈금용: 345만 / $1.2k */
+  const moneyTick = (n) => isWon()
+    ? (n >= 1e8 ? (n / 1e8).toFixed(1).replace(/\.0$/, '') + '억' : n >= 1e4 ? Math.round(n / 1e4) + '만' : Math.round(n).toLocaleString('ko-KR'))
+    : (n >= 1000 ? '$' + (n / 1000).toFixed(n >= 10000 ? 0 : 1) + 'k' : '$' + Math.round(n));
+  const roundAmt = (n) => (isWon() ? Math.round(n) : Math.round(n * 100) / 100);
+  const parseAmt = (v) => roundAmt(parseFloat(String(v).replace(/[$,원₩￦\s]/g, '')));
+  const fmtAmtInput = (n) => (isWon() ? String(Math.round(n)) : n.toFixed(2));
 
   function range(kind, offset = 0, now = new Date()) {
     if (kind === 'day') { const s = addDays(sod(now), offset); return [s, addDays(s, 1)]; }
@@ -125,8 +182,8 @@
     for (const r of records) if (r.type === 'out' && r.ts >= +s && r.ts < +e) { spent[r.category || '기타'] = (spent[r.category || '기타'] || 0) + r.amount; all += r.amount; }
     spent[BUDGET_ALL] = all;
     return BUDGET_CATS.filter((c) => settings.budgets[c] > 0).map((c) => {
-      const limit = settings.budgets[c], sp = Math.round((spent[c] || 0) * 100) / 100, pct = sp / limit;
-      return { cat: c, limit, spent: sp, pct, left: Math.round((limit - sp) * 100) / 100, level: pct >= 1 ? 2 : pct >= 0.8 ? 1 : 0 };
+      const limit = settings.budgets[c], sp = roundAmt(spent[c] || 0), pct = sp / limit;
+      return { cat: c, limit, spent: sp, pct, left: roundAmt(limit - sp), level: pct >= 1 ? 2 : pct >= 0.8 ? 1 : 0 };
     });
   }
   function budgetHTML(b) {
@@ -228,7 +285,7 @@
     $('balance').classList.toggle('neg', bal < 0);
     syncPeriodSeg();
     const t = totals(...range(homePeriod === 'all' ? 'all' : homePeriod));
-    const short = (n) => Math.abs(n) >= 1000 ? (n < 0 ? '-' : '') + '$' + Math.round(Math.abs(n)).toLocaleString('en-CA') : money(n);
+    const short = moneyShort;
     $('pIn').textContent = short(t.inn); $('pOut').textContent = short(t.out); $('pNet').textContent = short(t.net);
     const rec = records.slice(-6).reverse();
     $('recent').innerHTML = rec.length ? rec.map((r) => rowHTML(r, true)).join('') : emptyHTML(T('아직 기록이 없어요.<br>지출 버튼을 누르고 말해보세요.'));
@@ -236,38 +293,53 @@
     renderHomeBudget();
   }
 
-  // ---------- 직장주급 (격주 수요일, 오전 4시 이후 입력) ----------
+  // ---------- 급여일 (격주·매주는 첫 지급일부터 14·7일마다, 매달은 N일 / 말일, 입금 가능 시각 이후 입력) ----------
   function paydayAt(d) { const [h, m] = settings.payTime.split(':').map(Number); const x = sod(d); x.setHours(h, m, 0, 0); return x; }
-  function paydays() {
-    const [y, mo, da] = settings.firstPay.split('-').map(Number);
-    return { first: paydayAt(new Date(y, mo - 1, da)) };
+  function monthPayday(y, mo) {   // mo: 0~11, payDay 0 = 말일, 그 달에 없는 날(31일 등)은 말일로
+    const last = new Date(y, mo + 1, 0).getDate();
+    const d = settings.payDay > 0 ? Math.min(settings.payDay, last) : last;
+    return paydayAt(new Date(y, mo, d));
   }
   /** now 기준: 가장 최근 지급일(이미 지난)과 다음 지급일 */
   function payInfo(now = new Date()) {
-    const { first } = paydays();
+    const cyc = settings.payCycle;
+    if (cyc === 'none') return { last: null, next: null, todayBefore: false };
+    if (cyc === 'monthly') {
+      let cand = monthPayday(now.getFullYear(), now.getMonth()), todayBefore = false;
+      if (now < cand) { todayBefore = dkey(cand) === dkey(now); cand = monthPayday(now.getFullYear(), now.getMonth() - 1); }
+      const next = monthPayday(cand.getFullYear(), cand.getMonth() + 1);
+      return { last: cand, next, todayBefore };
+    }
+    const step = cyc === 'weekly' ? 7 : 14;
+    const [y, mo, da] = settings.firstPay.split('-').map(Number);
+    const first = paydayAt(new Date(y, mo - 1, da));
     const days = Math.floor((sod(now) - sod(first)) / 864e5);
     if (days < 0) return { last: null, next: first, todayBefore: false };
-    let n = Math.floor(days / 14);
-    let cand = paydayAt(addDays(sod(first), n * 14));
+    let n = Math.floor(days / step);
+    let cand = paydayAt(addDays(sod(first), n * step));
     let todayBefore = false;
-    if (now < cand) { todayBefore = dkey(cand) === dkey(now); n--; cand = n >= 0 ? paydayAt(addDays(sod(first), n * 14)) : null; }
-    const next = paydayAt(addDays(sod(first), (n + 1) * 14));
+    if (now < cand) { todayBefore = dkey(cand) === dkey(now); n--; cand = n >= 0 ? paydayAt(addDays(sod(first), n * step)) : null; }
+    const next = paydayAt(addDays(sod(first), (n + 1) * step));
     return { last: cand, next, todayBefore };
   }
-  const wagePaid = (day) => records.some((r) => r.payday === dkey(day));
+  const cycleText = () => ({ biweekly: '2주마다', weekly: '매주', monthly: settings.payDay > 0 ? `매달 ${settings.payDay}일` : '매달 말일', none: '' })[settings.payCycle];
+  // 급여를 이미 넣었는지: 배너로 넣은 기록, 또는 지급일~3일 뒤 사이에 말로 넣은 수입 기록
+  const wagePaid = (day) => { const s0 = +sod(day), e0 = +addDays(sod(day), 4); return records.some((r) => r.payday === dkey(day) || (r.type === 'in' && r.ts >= s0 && r.ts < e0)); };
+  // 앱을 처음 쓰기 전의 지급일은 묻지 않기
+  const payDue = (info) => !!(info.last && !wagePaid(info.last) && !(settings.since && dkey(info.last) < settings.since));
   function renderPayday() {
     const info = payInfo(); const box = $('paydayBanner');
     let html = '';
-    if (info.last && !wagePaid(info.last)) {
-      html = `<div class="banner"><span class="ic">${icon('i-coins')}</span><div class="t"><b>${T('{name} 입금일', { name: T(WAGE_NAME) })}</b>${T('{date} 주급을 입력하세요', { date: `${info.last.getMonth() + 1}.${info.last.getDate()} (${DOWx(info.last.getDay())})` })}</div>
+    if (payDue(info)) {
+      html = `<div class="banner"><span class="ic">${icon('i-coins')}</span><div class="t"><b>${T('{name} 입금일', { name: payName() })}</b>${T('{date} ' + payItem() + '을 입력하세요', { date: `${info.last.getMonth() + 1}.${info.last.getDate()} (${DOWx(info.last.getDay())})` })}</div>
         <button id="payBtn">${T('입금 입력')}</button></div>`;
     } else if (info.todayBefore) {
-      html = `<div class="banner"><span class="ic">${icon('i-coins')}</span><div class="t"><b>${T('오늘은 {name} 입금일', { name: T(WAGE_NAME) })}</b>${T('{time} 이후에 입력할 수 있어요', { time: fmtTime(info.next) })}</div>
+      html = `<div class="banner"><span class="ic">${icon('i-coins')}</span><div class="t"><b>${T('오늘은 {name} 입금일', { name: payName() })}</b>${T('{time} 이후에 입력할 수 있어요', { time: fmtTime(info.next) })}</div>
         <button disabled>${T('대기 중')}</button></div>`;
     }
     box.innerHTML = html;
     const b = $('payBtn');
-    if (b) b.onclick = () => openEntry('in', { merchant: T(WAGE_NAME), item: T('주급'), category: '수입', when: new Date(), payday: dkey(info.last) });
+    if (b) b.onclick = () => openEntry('in', { merchant: payName(), item: payItem(), category: '수입', when: new Date(), payday: dkey(info.last) });
   }
 
   // ---------- 기록 ----------
@@ -279,7 +351,7 @@
     $('mLabel').textContent = T('{y}년 {m}월', { y: viewMonth.getFullYear(), m: viewMonth.getMonth() + 1, });
     const list = monthRecords(viewMonth);
     const t = totals(som(viewMonth), new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 1));
-    const short = (n) => Math.abs(n) >= 1000 ? (n < 0 ? '-' : '') + '$' + Math.round(Math.abs(n)).toLocaleString('en-CA') : money(n);
+    const short = moneyShort;
     $('mIn').textContent = short(t.inn); $('mOut').textContent = short(t.out); $('mNet').textContent = short(t.net);
     renderCharts(list);
     if (!list.length) { $('historyList').innerHTML = emptyHTML(T('이 달에는 기록이 없어요.'), 'i-ledger'); return; }
@@ -317,7 +389,7 @@
     const months = []; for (let i = 5; i >= 0; i--) months.push(new Date(viewMonth.getFullYear(), viewMonth.getMonth() - i, 1));
     const vals = months.map((m) => monthRecords(m).filter((r) => r.type === 'out').reduce((s, r) => s + r.amount, 0));
     const tmax = Math.max(1, ...vals);
-    const k = (n) => n >= 1000 ? '$' + (n / 1000).toFixed(n >= 10000 ? 0 : 1) + 'k' : '$' + Math.round(n);
+    const k = moneyTick;
     $('trendChart').innerHTML = months.map((m, i) => `<button data-m="${i}" class="${i === 5 ? 'cur' : ''}" aria-label="${m.getMonth() + 1}월 지출 ${money(vals[i])}">
       <span class="tv num">${vals[i] ? k(vals[i]) : ''}</span><span class="col" style="height:${(vals[i] / tmax * 78).toFixed(1)}%"></span><span class="m">${m.getMonth() + 1}월</span></button>`).join('');
     const avg = vals.slice(0, 5).filter(Boolean);
@@ -369,7 +441,32 @@
   function setupStatic() {
     $('askChips').innerHTML = CHIPS.map((c) => `<button>${esc(c)}</button>`).join('');
     $('fCategory').innerHTML = CATS.map((c) => `<option value="${c}">${esc(c)}</option>`).join('');
-    $('verLine').textContent = '오늘 얼마 썼어? v0.9.2' + (IS_PREVIEW ? ' · 미리보기 (기록은 이 화면에만 저장)' : '');
+    $('verLine').textContent = '오늘 얼마 썼어? v0.9.3' + (IS_PREVIEW ? ' · 미리보기 (기록은 이 화면에만 저장)' : '');
+    $('sCurrency').innerHTML = Object.entries(CURRENCIES).map(([c, l]) => `<option value="${c}">${esc(l)}</option>`).join('');
+    applyCurrencyUI();
+  }
+  function applyCurrencyUI() {
+    $('ncCur').textContent = settings.currency;
+    $('ncEmblem').setAttribute('href', isWon() ? '#i-won' : '#i-dollar');
+    $('fAmountL').textContent = isWon() ? '금액 (원)' : '금액 ($)';
+    $('fAmount').placeholder = isWon() ? '0' : '0.00';
+    $('fAmount').inputMode = isWon() ? 'numeric' : 'decimal';
+    document.querySelectorAll('#budgetFields input').forEach((i) => { i.inputMode = isWon() ? 'numeric' : 'decimal'; });
+  }
+  // 통화 바꾸기: 기록은 지우지 않고, 고른 통화로 저장한 기록만 보여줌. 예산도 통화마다 따로
+  function switchCurrency(c) {
+    if (!CURRENCIES[c] || c === settings.currency) return;
+    saveRecords();
+    settings.budgetsByCur = settings.budgetsByCur || {};
+    settings.budgetsByCur[settings.currency] = settings.budgets;
+    settings.currency = c;
+    settings.budgets = settings.budgetsByCur[c] || {};
+    save(KEY_SET, settings);
+    P.setCurrency(c);
+    records = allRecords.filter((r) => r.cur === c);
+    applyCurrencyUI(); render(); renderSettings();
+    const other = allRecords.length - records.length;
+    toast(`${CURRENCIES[c]}로 바꿨어요` + (other ? ` · 다른 통화 기록 ${other}건은 그대로 보관돼요` : ''), 3600);
   }
 
   // ---------- 입력 시트 ----------
@@ -380,7 +477,9 @@
     $('detailFields').hidden = false;
     $('sheetTitle').textContent = T(existing ? '기록 수정' : (type === 'in' ? '입금 입력' : '지출 입력'));
     $('entryMic').className = type;
-    $('entryText').placeholder = (type === 'in' ? '예) 직장주급 1850불 25' : '예) 철수랑 코리아하우스에서 저녁 45불');
+    $('entryText').placeholder = isWon()
+      ? (type === 'in' ? `예) ${payName()} 3,456,400원` : '예) 이마트에서 장보기 45,670원')
+      : (type === 'in' ? `예) ${payName()} 1850불 25` : '예) 철수랑 코리아하우스에서 저녁 45불');
     const src = existing || preset || {};
     $('entryText').value = existing ? (existing.memo || '') : '';
     growText();
@@ -406,7 +505,7 @@
   function currentForm() {
     return {
       type: entry.type,
-      amount: Math.round(parseFloat(String($('fAmount').value).replace(/[$,]/g, '')) * 100) / 100,
+      amount: parseAmt($('fAmount').value),
       merchant: $('fMerchant').value.trim(),
       item: $('fItem').value.trim(),
       with: $('fWith').value.split(/[,，、]/).map((s) => s.trim()).filter(Boolean),
@@ -461,10 +560,10 @@
     if (entry?.multi) { entry.multi = null; $('detailFields').hidden = false; }
     const p = P.parseEntry(said);
     if (said.trim()) { entry.lang = p.lang; entry.extra = { to: p.to, forWho: p.forWho, dest: p.dest, verb: p.verb }; }
-    if (p.amount != null) $('fAmount').value = p.amount.toFixed(2);
+    if (p.amount != null) $('fAmount').value = fmtAmtInput(p.amount);
     entry.amountNote = p.amountGuess ? p.amountGuess : p.amountOdd ? { odd: true } : null;
-    if (p.merchant || !entry?.payday) $('fMerchant').value = p.merchant || (entry?.payday ? T(WAGE_NAME) : '');
-    $('fItem').value = p.item || (entry?.payday ? T('주급') : '');
+    if (p.merchant || !entry?.payday) $('fMerchant').value = p.merchant || (entry?.payday ? payName() : '');
+    $('fItem').value = p.item || (entry?.payday ? payItem() : '');
     $('fWith').value = p.with.join(', ');
     $('fMeal').value = p.meal;
     if (entry?.type === 'out') $('fCategory').value = p.category === '수입' ? '기타' : p.category;
@@ -679,16 +778,16 @@
       const d = new Date(r.ts);
       run += r.type === 'in' ? r.amount : -r.amount;
       rows.push([dkey(d), DOWx(d.getDay()), fmtTime(d), T(r.type === 'in' ? '입금' : '지출'), P.describe(r), r.merchant || '', r.item || '',
-        (r.with || []).join(', '), r.meal ? T(r.meal) : '', T(r.category || '기타'), r.type === 'in' ? r.amount : null, r.type === 'out' ? r.amount : null, Math.round(run * 100) / 100, r.memo || '']);
+        (r.with || []).join(', '), r.meal ? T(r.meal) : '', T(r.category || '기타'), r.type === 'in' ? r.amount : null, r.type === 'out' ? r.amount : null, roundAmt(run), r.memo || '']);
     }
     const ws = XLSX.utils.aoa_to_sheet(rows);
     ws['!cols'] = [12, 5, 10, 6, 36, 16, 18, 16, 10, 10, 12, 12, 12, 40].map((w) => ({ wch: w }));
-    const fmt = '"$"#,##0.00';
+    const fmt = isWon() ? '#,##0"원"' : '"$"#,##0.00';
     for (let i = 1; i < rows.length; i++) for (const c of ['K', 'L', 'M']) { const cell = ws[c + (i + 1)]; if (cell) cell.z = fmt; }
     ws['!autofilter'] = { ref: `A1:N${rows.length}` };
 
     const t0 = totals(som(m), new Date(y, mo, 1));
-    const r2 = (n) => Math.round(n * 100) / 100;
+    const r2 = roundAmt;
     const t = { inn: r2(t0.inn), out: r2(t0.out), net: r2(t0.net) };
     const byCat = {};
     for (const r of list) if (r.type === 'out') byCat[r.category] = (byCat[r.category] || 0) + r.amount;
@@ -752,7 +851,7 @@
     jobs.push(['m', dkey(ms), T('{y}년 {m}월 월간 요약', { y: ms.getFullYear(), m: ms.getMonth() + 1, }), totals(ms, new Date(ms.getFullYear(), ms.getMonth() + 1, 1))]);
     // 주급
     const pi = payInfo(now);
-    if (pi.last && !wagePaid(pi.last)) jobs.push(['p', dkey(pi.last), T('{name} 입금일', { name: T(WAGE_NAME) }), null]);
+    if (payDue(pi)) jobs.push(['p', dkey(pi.last), T('{name} 입금일', { name: payName() }), null]);
 
     for (const [k, key, title, t] of jobs) {
       if (notified[k] === key) continue;
@@ -809,27 +908,34 @@
   }
   $('budgetFields').addEventListener('change', (e) => {
     const inp = e.target.closest('input[data-bcat]'); if (!inp) return;
-    const v = Math.round(parseFloat(String(inp.value).replace(/[$,\s]/g, '')) * 100) / 100;
+    const v = parseAmt(inp.value);
     if (v > 0) { settings.budgets[inp.dataset.bcat] = v; inp.value = v; } else { delete settings.budgets[inp.dataset.bcat]; inp.value = ''; }
     save(KEY_SET, settings); toast(v > 0 ? `${inp.dataset.bcat === BUDGET_ALL ? '전체' : inp.dataset.bcat} 예산 ${money(v)} 저장` : '예산을 지웠어요');
   });
   function renderSettings() {
     renderLearned();
     renderBudgetFields();
+    $('sCurrency').value = settings.currency;
+    $('sPayName').value = settings.payName; $('sPayCycle').value = settings.payCycle; $('sPayDay').value = String(settings.payDay);
     $('sFirstPay').value = settings.firstPay; $('sPayTime').value = settings.payTime;
+    const cyc = settings.payCycle;
+    $('payFirstF').hidden = !(cyc === 'biweekly' || cyc === 'weekly'); $('payDayF').hidden = cyc !== 'monthly'; $('payTimeF').hidden = cyc === 'none';
     $('sNotifyTime').value = settings.notifyTime; $('sWeekStart').value = String(settings.weekStart);
     const pi = payInfo();
-    $('nextPay').textContent = T('다음 {name}: {when} (2주마다)', { name: T(WAGE_NAME), when: fmtDate(pi.next) + ' ' + fmtTime(pi.next) });
+    $('nextPay').textContent = pi.next ? `다음 ${payName()}: ${fmtDate(pi.next)} ${fmtTime(pi.next)} (${cycleText()})` : '급여 알림을 쓰지 않아요';
     renderNotifyState();
   }
-  [['sFirstPay', 'firstPay'], ['sPayTime', 'payTime'], ['sNotifyTime', 'notifyTime'], ['sWeekStart', 'weekStart']].forEach(([id, k]) =>
+  $('sCurrency').addEventListener('change', (e) => switchCurrency(e.target.value));
+  [['sFirstPay', 'firstPay'], ['sPayTime', 'payTime'], ['sNotifyTime', 'notifyTime'], ['sWeekStart', 'weekStart'], ['sPayName', 'payName'], ['sPayCycle', 'payCycle'], ['sPayDay', 'payDay']].forEach(([id, k]) =>
     $(id).addEventListener('change', (e) => {
-      if (!e.target.value) return;
-      settings[k] = k === 'weekStart' ? Number(e.target.value) : e.target.value;
+      const v = String(e.target.value).trim();
+      if (!v) return;
+      settings[k] = k === 'weekStart' || k === 'payDay' ? Number(v) : v;
+      if (k === 'payName' || k === 'payCycle' || k === 'payDay') renderHome();
       save(KEY_SET, settings); renderSettings(); toast(T('저장했어요'));
     }));
   $('btnBackup').onclick = () => {
-    const blob = new Blob([JSON.stringify({ app: 'voice-budget', version: 2, exported: new Date().toISOString(), settings, learn, records }, null, 1)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify({ app: 'voice-budget', version: 2, exported: new Date().toISOString(), settings, learn, records: (saveRecords(), allRecords) }, null, 1)], { type: 'application/json' });
     shareOrDownload(blob, `가계부_백업_${dkey(new Date())}.json`);
   };
   $('btnRestore').onclick = () => $('restoreFile').click();
@@ -839,8 +945,12 @@
       const data = JSON.parse(await f.text());
       if (!Array.isArray(data.records)) throw new Error();
       if (!(await askConfirm(T('백업의 기록 {n}건으로 바꿀까요? 지금 기록은 덮어써져요.', { n: data.records.length }), T('불러오기')))) { e.target.value = ''; return; }
-      records = data.records; Object.assign(settings, data.settings || {}); delete settings.lang;
+      Object.assign(settings, data.settings || {}); delete settings.lang;
+      if (!CURRENCIES[settings.currency]) settings.currency = 'CAD';
       if (!settings.budgets || typeof settings.budgets !== 'object') settings.budgets = {};
+      allRecords = data.records.map((r) => (r.cur ? r : Object.assign(r, { cur: 'CAD' })));
+      P.setCurrency(settings.currency);
+      records = allRecords.filter((r) => r.cur === settings.currency); applyCurrencyUI();
       save(KEY_SET, settings); saveRecords();
       if (data.learn && typeof data.learn === 'object') { for (const k of ['words', 'cats', 'phrases']) learn[k] = data.learn[k] || {}; saveLearn(); }
       render(); toast(T('불러왔어요') + (data.learn ? ' (내가 가르친 말 포함)' : ''));
@@ -849,7 +959,7 @@
   };
   $('btnWipe').onclick = async () => {
     if (!(await askConfirm(T('모든 기록을 삭제할까요? 되돌릴 수 없어요. 먼저 백업을 권장합니다.'), T('모두 삭제')))) return;
-    records = []; saveRecords(); render(); toast(T('모두 삭제했어요'));
+    allRecords = []; records = []; saveRecords(); render(); toast(T('모두 삭제했어요'));
   };
 
   // ---------- 시작 ----------
@@ -865,5 +975,5 @@
   setupStatic(); render(); checkSummaries();
 
   // 테스트용으로 노출
-  window.VB = { payInfo, range, totals, exportMonth, answer, get records() { return records; } };
+  window.VB = { payInfo, range, totals, exportMonth, answer, get records() { return records; }, get allRecords() { return allRecords; }, switchCurrency };
 })();

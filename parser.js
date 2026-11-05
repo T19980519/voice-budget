@@ -20,6 +20,7 @@
       if (ch in KO_DIGIT) { num = KO_DIGIT[ch]; any = true; continue; }
       if (ch in KO_SMALL) { section += (num || 1) * KO_SMALL[ch]; num = 0; any = true; continue; }
       if (ch === '만') { section += num; total += (section || 1) * 10000; section = 0; num = 0; any = true; continue; }
+      if (ch === '억') { section += num; total = (total + section || 1) * 100000000; section = 0; num = 0; any = true; continue; }
       return NaN;
     }
     return any ? total + section + num : NaN;
@@ -34,7 +35,53 @@
   function round2(n) { return Math.round(n * 100) / 100; }
 
   /** 텍스트에서 금액을 찾아 {amount, start, end} 반환 */
+  // ---------- 통화 ----------
+  // 'CAD' | 'USD' : 불·달러·센트 / 'KRW' : 원 (45,670원, 사만오천육백칠십 원, 4만 5천 원, 1.5만원, 3억)
+  let CURRENCY = 'CAD';
+  function setCurrency(c) { CURRENCY = ['KRW', 'USD', 'CAD'].includes(c) ? c : 'CAD'; }
+  const WON_NUM = '[\\d,.일이삼사오육륙칠팔구십백천만억]+';
+  /** "1.5만", "4만5,670", "삼백사십오만육천사백" → 숫자 */
+  function parseWon(tok) {
+    const t = String(tok).replace(/,/g, '');
+    const m = /^(\d+\.\d+)(억|만|천)(.*)$/.exec(t);
+    if (m) { const U = { 억: 1e8, 만: 1e4, 천: 1e3 }[m[2]]; const rest = m[3] ? parseWon(m[3]) : 0; return isNaN(rest) ? NaN : Number(m[1]) * U + rest; }
+    if (/\./.test(t)) return /^\d+\.\d+$/.test(t) ? Number(t) : NaN;
+    return parseKoNumber(t);
+  }
+  /** 원 앞의 숫자로 볼 만한지: 아라비아 숫자, 두 글자 이상, 또는 십·백·천·만·억 ("사원"·"오원"은 금액이 아님) */
+  const okWonNum = (n) => /\d/.test(n) || String(n).replace(/,/g, '').length >= 2 || /[십백천만억]/.test(n);
+  function findWon(text) {
+    let m;
+    if ((m = /[₩￦]\s*(\d[\d,]*)/.exec(text))) return { amount: parseWon(m[1]), start: m.index, end: m.index + m[0].length };
+    // 숫자 + 원 : 여러 개면 가장 큰 금액 ("사원 식당 8000원"에서 '사 원'을 4원으로 보지 않게)
+    const re = new RegExp('(^|[^가-힣\\d])(' + WON_NUM + ')\\s*(원|won)(?:짜리|어치|정도|이요|이야|입니다|이에요|요)?', 'gi');
+    let best = null;
+    while ((m = re.exec(text))) {
+      if (!okWonNum(m[2])) continue;
+      const v = parseWon(m[2]);
+      if (isNaN(v) || v <= 0) continue;
+      const st = m.index + m[1].length;
+      if (!best || v > best.amount) best = { amount: v, start: st, end: m.index + m[0].length };
+    }
+    if (best) return best;
+    // 단위 없이 "4만5천", "삼만 오천" 처럼 자릿말이 들어간 금액
+    re.lastIndex = 0;
+    const re2 = new RegExp('(^|\\s)(' + WON_NUM + ')(?=\\s|$|[,.!?])', 'g');
+    while ((m = re2.exec(text))) {
+      if (!/[천만억]/.test(m[2]) || m[2].length < 2) continue;
+      const v = parseWon(m[2]);
+      if (!isNaN(v) && v >= 1000 && (!best || v > best.amount)) best = { amount: v, start: m.index + m[1].length, end: m.index + m[0].length };
+    }
+    if (best) return best;
+    // 마지막: 단위 없는 숫자 (개수·시간 단위가 붙은 건 제외)
+    const reN = /(\d[\d,]*)(?!\d)/g; let last = null;
+    while ((m = reN.exec(text))) if (!NOT_CENT_AFTER.test(text.slice(m.index + m[0].length))) last = m;
+    if (last) return { amount: parseKoNumber(last[1]), start: last.index, end: last.index + last[0].length, bare: true };
+    return null;
+  }
+
   function findAmount(text) {
+    if (CURRENCY === 'KRW') { const w = findWon(text); if (w) w.amount = Math.round(w.amount); return w; }
     let m;
     // $1.99 / $ 12
     m = /\$\s*(\d[\d,]*(?:\.\d{1,2})?)/.exec(text);
@@ -99,6 +146,7 @@
     return max;
   }
   function plausibleAmount(a, rec, history) {
+    if (CURRENCY === 'KRW') return a ? a.amount : null;
     if (!a || !a.bare || !a.digits || a.digits.length < 3 || /^0/.test(a.digits)) return a ? a.amount : null;
     const n = Number(a.digits), cents = round2(n / 100);
     const max = priceMaxFor(rec);
@@ -115,6 +163,10 @@
 
   // ---------- 표기 통일 (동의어) ----------
   const SYNONYMS = [
+    ['배달의민족', '배민', '배달의 민족'], ['쿠팡이츠', '쿠팡 이츠'], ['씨유', 'cu'], ['지에스25', 'gs25', '지에스 25', 'gs 25'], ['이마트24', '이마트 24', 'emart24'],
+    ['투썸플레이스', '투썸', 'twosome'], ['컴포즈커피', '컴포즈'], ['메가커피', '메가 커피', '메가엠지씨커피', '메가MGC커피'], ['케이티엑스', 'ktx'], ['에스알티', 'srt'],
+    ['에스케이티', 'skt', '에스케이 텔레콤'], ['케이티', 'kt'], ['엘지유플러스', '유플러스', 'lg유플러스', 'lgu+', 'u+'], ['마켓컬리', '컬리', 'kurly'], ['이마트', 'emart', 'e마트'],
+    ['에쓰오일', 's-oil', '에스오일'], ['지에스칼텍스', 'gs칼텍스'], ['교통카드', '교통 카드'], ['티머니', 't-money', 'tmoney'],
     ['슬리퍼', '쓰레빠', '쓰리빠', '슬리빠', '쓰레파', 'slippers'],
     ['배터리', '건전지', '배터리들', '밧데리', '바테리', '빳데리', '빠떼리', '밧떼리', 'battery', 'batteries'],
     ['베스트바이', '베스트 바이', '베스트봐이', 'bestbuy', 'best buy'],
@@ -217,16 +269,16 @@
 
   // ---------- 카테고리 ----------
   const CATEGORIES = [
-    ['커피', ['커피', '아이스캡', '프라푸치노', '핫초코', '밀크티', '버블티', '머핀', '베이글', '크루아상', '도넛', '스타벅스', '팀홀튼', '라떼', '아메리카노', '카페', '에스프레소', '카푸치노', '세컨드컵', '블루보틀', '밸런스커피', '발란스']],
-    ['식비', ['파리바게뜨', '뚜레쥬르', '본죽', '교촌', '비비큐', '맘스터치', '국밥', '설렁탕', '감자탕', '순두부', '김치찌개', '된장찌개', '짬뽕', '탕수육', '만두', '우동', '생선회', '사시미', '햄버거', '치킨', '분식', '순대', '족발', '보쌈', '닭갈비', '곱창', '쌀국수', '돈까스', '카레', '도시락', '반찬', '외식', '배달', '식사', '밥값', '술집', '술자리', '술값', '피자피자', '스위스샬레', '하비스', '웬디스', '버거킹', '케이에프씨', '파파이스', '치폴레', '우버이츠', '스킵더디쉬', '도어대시', '엘씨비오', '비어스토어', '소주', '맥주', '와인', '갈비', '냉면', '삼겹살', '불고기', '비빔밥', '김밥', '떡볶이', '짜장면', '국수', '쌀국수', '샐러드', '파스타', '스테이크', '타코', '감자튀김', '아이스크림', '과자', '음료수', '케이크', 'food', 'takeout', 'take-out', 'meal', '점심', '저녁', '아침', '식당', '밥', '피자', '치킨', '버거', '맥도날드', '라면', '짜장', '초밥', '스시', '외식', '배달', '도시락', '샌드위치', '서브웨이']],
-    ['장보기', ['메트로', '소비스', '푸드베이직스', '프레시코', '두부', '사과', '바나나', '코스트코', '한아름', '갤러리아', '티앤티', '노프릴스', '로블로', '월마트', '장보기', '식료품', '마트', '과일', '야채', '우유', '계란', '쌀']],
-    ['교통', ['주차비', '주차료', '톨비', '통행료', '에쏘', '페트로캐나다', '쉘', '주유소', '세차', '자동차', '자동차보험', 'go train', 'train', '주유', '기름', '개스', '주차', '프레스토', 'presto', 'ttc', '택시', '우버', 'uber', '407', '톨비', '지하철', '버스']],
-    ['전자제품', ['베스트바이', '배터리', '충전기', '케이블', '이어폰', '컴퓨터', '노트북', '아이폰', '애플', '맥북', '모니터']],
+    ['커피', ['이디야', '메가커피', '컴포즈커피', '빽다방', '투썸플레이스', '할리스', '폴바셋', '커피빈', '공차', '탐앤탐스', '커피', '아이스캡', '프라푸치노', '핫초코', '밀크티', '버블티', '머핀', '베이글', '크루아상', '도넛', '스타벅스', '팀홀튼', '라떼', '아메리카노', '카페', '에스프레소', '카푸치노', '세컨드컵', '블루보틀', '밸런스커피', '발란스']],
+    ['식비', ['김밥천국', '롯데리아', '배달의민족', '요기요', '쿠팡이츠', '백반', '치맥', '회식', '파리바게뜨', '뚜레쥬르', '본죽', '교촌', '비비큐', '맘스터치', '국밥', '설렁탕', '감자탕', '순두부', '김치찌개', '된장찌개', '짬뽕', '탕수육', '만두', '우동', '생선회', '사시미', '햄버거', '치킨', '분식', '순대', '족발', '보쌈', '닭갈비', '곱창', '쌀국수', '돈까스', '카레', '도시락', '반찬', '외식', '배달', '식사', '밥값', '술집', '술자리', '술값', '피자피자', '스위스샬레', '하비스', '웬디스', '버거킹', '케이에프씨', '파파이스', '치폴레', '우버이츠', '스킵더디쉬', '도어대시', '엘씨비오', '비어스토어', '소주', '맥주', '와인', '갈비', '냉면', '삼겹살', '불고기', '비빔밥', '김밥', '떡볶이', '짜장면', '국수', '쌀국수', '샐러드', '파스타', '스테이크', '타코', '감자튀김', '아이스크림', '과자', '음료수', '케이크', 'food', 'takeout', 'take-out', 'meal', '점심', '저녁', '아침', '식당', '밥', '피자', '치킨', '버거', '맥도날드', '라면', '짜장', '초밥', '스시', '외식', '배달', '도시락', '샌드위치', '서브웨이']],
+    ['장보기', ['이마트', '홈플러스', '롯데마트', '트레이더스', '하나로마트', '노브랜드', '마켓컬리', '편의점', '이마트24', '지에스25', '씨유', '세븐일레븐', '미니스톱', '메트로', '소비스', '푸드베이직스', '프레시코', '두부', '사과', '바나나', '코스트코', '한아름', '갤러리아', '티앤티', '노프릴스', '로블로', '월마트', '장보기', '식료품', '마트', '과일', '야채', '우유', '계란', '쌀']],
+    ['교통', ['교통카드', '티머니', '카카오택시', '케이티엑스', '에스알티', '고속버스', '시외버스', '하이패스', '톨게이트', '에쓰오일', '지에스칼텍스', '현대오일뱅크', '따릉이', '주차비', '주차료', '톨비', '통행료', '에쏘', '페트로캐나다', '쉘', '주유소', '세차', '자동차', '자동차보험', 'go train', 'train', '주유', '기름', '개스', '주차', '프레스토', 'presto', 'ttc', '택시', '우버', 'uber', '407', '톨비', '지하철', '버스']],
+    ['전자제품', ['하이마트', '전자랜드', '베스트바이', '배터리', '충전기', '케이블', '이어폰', '컴퓨터', '노트북', '아이폰', '애플', '맥북', '모니터']],
     ['생활용품', ['키친타월', '물티슈', '전구', '쓰레기봉투', '수건', '그릇', '청소', '세정제', '방향제', '화장지', '달러라마', '홈센스', '이케아', '스테이플스', '세탁', '수리', '미용실', '이발', '다이소', '캐네디언타이어', '홈디포', '쇼퍼스', '세제', '휴지', '샴푸', '치약']],
-    ['쇼핑', ['유니클로', '자라', '에이치앤엠', '갭', '올드네이비', '나이키', '아디다스', '룰루레몬', '세포라', '마셜스', '티제이맥스', '바지', '셔츠', '자켓', '재킷', '패딩', '양말', '속옷', '운동화', '구두', '가방', '모자', '화장품', '향수', '네일', '안경테', '지갑', '시계', '위너스', '더베이', '스포츠첵', '인디고', '애플스토어', '책', '장난감', '꽃', '아마존', '옷', '신발', '쇼핑']],
-    ['통신/구독', ['핸드폰비', '전화비', '인터넷', '넷플릭스', '유튜브', '구독', '클로드', '로저스', '벨', '텔러스', '프리덤']],
-    ['주거', ['모기지', '콘도', '관리비', '유틸리티', '보험', '렌트', '월세', '전기세', '전기요금', '수도세', '가스비', '하이드로', 'hydro', '에너지', 'enbridge', '엔브리지', '재산세', '프로퍼티택스']],
-    ['의료', ['렉살', '약', '비타민', '약국', '병원', '치과', '약값', '안경']],
+    ['쇼핑', ['쿠팡', '무신사', '지마켓', '11번가', '옥션', '올리브영', '교보문고', '유니클로', '자라', '에이치앤엠', '갭', '올드네이비', '나이키', '아디다스', '룰루레몬', '세포라', '마셜스', '티제이맥스', '바지', '셔츠', '자켓', '재킷', '패딩', '양말', '속옷', '운동화', '구두', '가방', '모자', '화장품', '향수', '네일', '안경테', '지갑', '시계', '위너스', '더베이', '스포츠첵', '인디고', '애플스토어', '책', '장난감', '꽃', '아마존', '옷', '신발', '쇼핑']],
+    ['통신/구독', ['에스케이티', '케이티', '엘지유플러스', '알뜰폰', '티빙', '웨이브', '쿠팡플레이', '멜론', '통신비', '휴대폰요금', '핸드폰비', '전화비', '인터넷', '넷플릭스', '유튜브', '구독', '클로드', '로저스', '벨', '텔러스', '프리덤']],
+    ['주거', ['대출', '월세', '전세', '전기요금', '가스요금', '수도요금', '도시가스', '대출이자', '모기지', '콘도', '관리비', '유틸리티', '보험', '렌트', '월세', '전기세', '전기요금', '수도세', '가스비', '하이드로', 'hydro', '에너지', 'enbridge', '엔브리지', '재산세', '프로퍼티택스']],
+    ['의료', ['한의원', '안과', '피부과', '정형외과', '내과', '소아과', '이비인후과', '병원비', '렉살', '약', '비타민', '약국', '병원', '치과', '약값', '안경']],
     ['여가', ['영화', '공연', '팝콘', '볼링', '골프', '노래방', '당구', '스키', '박물관', '미술관', '전시', '티켓', '경기', '야구', '하키', '농구', '게임']],
     ['교육', ['학원', '학원비', '레슨', '레슨비', '과외', '교재', '수업료', '등록금', '학비', '튜터']],
     ['선물/경조사', ['선물', '생일선물', '축의금', '조의금', '부조', '부조금', '헌금', '십일조', '감사헌금', '기부', '후원', '세뱃돈', '용돈']],
@@ -310,7 +362,7 @@
     return stripParticle(w);
   }
 
-  const STORES = new Set(['유니클로', '자라', '에이치앤엠', '갭', '올드네이비', '나이키', '아디다스', '룰루레몬', '애플', '삼성', '세포라', '바이브레이', '마셜스', '티제이맥스', '노드스트롬', '코치', '팬도라', '플레이밍고', '파머스마켓', '파리바게뜨', '뚜레쥬르', '본죽', '교촌', '비비큐', '맘스터치', '메트로', '소비스', '푸드베이직스', '프레시코', '렉살', '엘씨비오', '비어스토어', '에쏘', '페트로캐나다', '쉘', '위너스', '홈센스', '달러라마', '스테이플스', '인디고', '피자피자', '스위스샬레', '하비스', '웬디스', '버거킹', '케이에프씨', '파파이스', '치폴레', '스포츠첵', '더베이', '우버이츠', '스킵더디쉬', '도어대시', '베스트바이', '코스트코', '팀홀튼', '스타벅스', '월마트', '아마존', '맥도날드', '쇼퍼스', '로블로',
+  const STORES = new Set(['편의점', '이마트', '홈플러스', '롯데마트', '트레이더스', '하나로마트', '노브랜드', '이마트24', '지에스25', '씨유', '세븐일레븐', '미니스톱', '쿠팡', '마켓컬리', '무신사', '올리브영', '이디야', '메가커피', '컴포즈커피', '빽다방', '투썸플레이스', '할리스', '폴바셋', '커피빈', '공차', '탐앤탐스', '김밥천국', '롯데리아', '배달의민족', '요기요', '쿠팡이츠', '교보문고', '하이마트', '전자랜드', '유니클로', '자라', '에이치앤엠', '갭', '올드네이비', '나이키', '아디다스', '룰루레몬', '애플', '삼성', '세포라', '바이브레이', '마셜스', '티제이맥스', '노드스트롬', '코치', '팬도라', '플레이밍고', '파머스마켓', '파리바게뜨', '뚜레쥬르', '본죽', '교촌', '비비큐', '맘스터치', '메트로', '소비스', '푸드베이직스', '프레시코', '렉살', '엘씨비오', '비어스토어', '에쏘', '페트로캐나다', '쉘', '위너스', '홈센스', '달러라마', '스테이플스', '인디고', '피자피자', '스위스샬레', '하비스', '웬디스', '버거킹', '케이에프씨', '파파이스', '치폴레', '스포츠첵', '더베이', '우버이츠', '스킵더디쉬', '도어대시', '베스트바이', '코스트코', '팀홀튼', '스타벅스', '월마트', '아마존', '맥도날드', '쇼퍼스', '로블로',
     '노프릴스', '한아름', '티앤티', '캐네디언타이어', '홈디포', '다이소', '갤러리아', '서브웨이', '세컨드컵', '이케아', 'ikea', '애플스토어']);
 
   // ---------- 식사 / 동행인 ----------
@@ -501,7 +553,7 @@
       const hist = PRICE_HISTORY ? PRICE_HISTORY(res) : null;
       const fixed = plausibleAmount(res._a, res, hist);
       if (fixed !== res.amount) { res.amountGuess = { heard: res._a.digits, to: fixed }; res.amount = fixed; }
-      else { const mx = priceMaxFor(res); if (mx && res.amount > mx * 1.5) res.amountOdd = true; }
+      else { const mx = priceMaxFor(res) * (CURRENCY === 'KRW' ? 1000 : 1); if (mx && res.amount > mx * 1.5) res.amountOdd = true; }
       delete res._a;
     }
     res.lang = 'ko';
@@ -914,10 +966,16 @@
   const NATIVE = { 한: 1, 두: 2, 세: 3, 네: 4, 다섯: 5, 여섯: 6, 일곱: 7, 여덟: 8, 아홉: 9, 열: 10, 열두: 12 };
   // ---------- 띄어서 말한 한국어 숫자 붙이기 ----------
   // "천 이백 불" → "천이백 불", "삼백 오십 불" → "삼백오십 불", "오 불 이십 오" → "오 불 이십오"
-  const KO_NUM_TOK = /^[영공일이삼사오육륙칠팔구십백천만]+$/;
-  const UNIT_TOK = new RegExp('^' + '(?:' + DOLLAR.slice(3, -1) + '|' + CENT.slice(3, -1) + ')', 'i');
+  const KO_NUM_TOK_D = /^[영공일이삼사오육륙칠팔구십백천만]+$/;
+  const KO_NUM_TOK_W = /^(?=.*[일이삼사오육륙칠팔구십백천만억]|[\d,]+$)[\d,일이삼사오육륙칠팔구십백천만억]+$/;   // 원: "4만", "5,670", "오천"
+  const UNIT_TOK_D = new RegExp('^' + '(?:' + DOLLAR.slice(3, -1) + '|' + CENT.slice(3, -1) + ')', 'i');
+  const UNIT_TOK_W = /^(원|won)/i;
   const lowPlace = (n) => { let p = 1; while (n && n % (p * 10) === 0) p *= 10; return p; };
   function joinSpacedNumbers(text) {
+    const W = CURRENCY === 'KRW';
+    const KO_NUM_TOK = W ? KO_NUM_TOK_W : KO_NUM_TOK_D, UNIT_TOK = W ? UNIT_TOK_W : UNIT_TOK_D;
+    // 원: "5,670원" → "5,670 원" (숫자와 원 사이를 띄워서 앞 숫자와 이어 붙일 수 있게)
+    if (W) text = String(text).replace(/(^|\s)([\d,.일이삼사오육칠팔구십백천만억]+)원(?=\s|$|[,.!?]|짜리|어치|정도|이요|이야|요)/g, (m0, a, n) => (okWonNum(n) ? a + n + ' 원' : m0));
     const toks = String(text).split(' ');
     const out = [];
     const nextIsUnit = (i) => i < toks.length && UNIT_TOK.test(toks[i]);
@@ -929,9 +987,9 @@
       const inAmount = nextIsUnit(k + 1) || UNIT_TOK.test(out[out.length - 1] || '');
       let j = i;
       while (inAmount && j < k) {
-        const a = parseKoNumber(cur), b = parseKoNumber(toks[j + 1]);
+        const a = W ? parseWon(cur) : parseKoNumber(cur), b = W ? parseWon(toks[j + 1]) : parseKoNumber(toks[j + 1]);
         if (isNaN(a) || isNaN(b)) break;
-        const placeOnly = /^[십백천만]/.test(toks[j + 1]);
+        const placeOnly = /^[십백천만억]/.test(toks[j + 1]);
         // 큰 자리 다음에 작은 수(천 이백), 또는 한 자리 숫자 다음에 자리말(이 백)
         const ok = (b > 0 && b < lowPlace(a) && a >= 10) || (a >= 1 && a <= 9 && placeOnly);
         if (!ok) break;
@@ -962,6 +1020,26 @@
   /** 단위가 분명한 금액만 찾기 ($12.99, 12불99, 99센트, 12.99불) */
   function strictAmounts(text) {
     const out = [];
+    if (CURRENCY === 'KRW') {
+      // 원: "89,000 원", "사만오천 원", "₩5000", 단위 없이 자릿말이 있는 "4만5천"
+      const rw = new RegExp('()([₩￦]\\s*\\d[\\d,]*)|(^|[^가-힣\\d])(' + WON_NUM + '\\s*(?:원|won)(?:짜리|어치)?)', 'gi');
+      let w;
+      while ((w = rw.exec(text))) {
+        const pre = w[1] != null ? w[1] : w[3], body = w[2] != null ? w[2] : w[4];
+        const num = body.replace(/\s*(원|won)(짜리|어치)?$/i, '').replace(/^[₩￦]\s*/, '');
+        if (isNaN(parseWon(num)) || !okWonNum(num)) continue;
+        const st = w.index + pre.length;
+        out.push({ start: st, end: st + body.length });
+      }
+      const rb = /(?:^|\s)(\d[\d,]*)(?=\s*(?:,(?!\d)|;|그리고|그다음|그담|다음에|또|$))/g;
+      while ((w = rb.exec(text))) {
+        const st = w.index + w[0].indexOf(w[1]), en = st + w[1].length;
+        if (out.some((o) => st < o.end && en > o.start)) continue;
+        out.push({ start: st, end: en });
+      }
+      out.sort((a, b) => a.start - b.start);
+      return out;
+    }
     const re = new RegExp('\\$\\s*\\d[\\d,]*(?:\\.\\d{1,2})?|' + NUM + '\\s*' + DOLLAR + '(?:\\s*(?:and\\s*)?' + NUM + '\\s*(?:' + CENT + ')?)?|' + NUM + '\\s*' + CENT, 'gi');
     let m;
     while ((m = re.exec(text))) {
@@ -975,7 +1053,7 @@
       re.lastIndex = m.index + len;
     }
     // 단위 없이 말한 금액: 숫자 바로 뒤에 "and / then / 그리고 / 그다음" 같은 이음말이 오면 한 건의 끝으로 봄
-    const reBare = /(?:^|\s)(\d[\d,]*(?:\.\d{1,2})?)(?=\s*(?:,|;|\band\b|\bthen\b|\balso\b|\bplus\b|그리고|그다음|그담|다음에|또|$))/gi;
+    const reBare = /(?:^|\s)(\d[\d,]*(?:\.\d{1,2})?)(?=\s*(?:,(?!\d)|;|\band\b|\bthen\b|\balso\b|\bplus\b|그리고|그다음|그담|다음에|또|$))/gi;
     while ((m = reBare.exec(text))) {
       const st = m.index + m[0].indexOf(m[1]), en = st + m[1].length;
       if (out.some((o) => st < o.end && en > o.start)) continue;
@@ -1024,7 +1102,7 @@
     if (si >= 0 && (!merchant || !STORES.has(normalizeKeyword(merchant)))) { area = merchant; merchant = words[si]; words.splice(si, 1); }
     return { merchant, item: words.join(' '), area };
   }
-  const api = { repairRecord, goodItemWord, setPriceHistory, plausibleAmount, nativeCount, learnPhrase, setPhrases, describeAuto, scoreText, setLearned, fixSounds, dateFrom, splitEntries, matchCount, describe, describeHTML, josa, parseKoNumber, findAmount, parseEntry, parseQuery, normalizeKeyword, searchText, recordMatches, guessCategory };
+  const api = { setCurrency, parseWon, findWon, repairRecord, goodItemWord, setPriceHistory, plausibleAmount, nativeCount, learnPhrase, setPhrases, describeAuto, scoreText, setLearned, fixSounds, dateFrom, splitEntries, matchCount, describe, describeHTML, josa, parseKoNumber, findAmount, parseEntry, parseQuery, normalizeKeyword, searchText, recordMatches, guessCategory };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.VBParser = api;
 })(typeof window !== 'undefined' ? window : globalThis);

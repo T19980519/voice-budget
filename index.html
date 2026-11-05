@@ -276,7 +276,8 @@ section[data-page]{display:none} section[data-page].on{display:block}
   <symbol id="i-chev-l" viewBox="0 0 24 24"><path d="m14.5 6-6 6 6 6"/></symbol>
   <symbol id="i-chev-r" viewBox="0 0 24 24"><path d="m9.5 6 6 6-6 6"/></symbol>
   <symbol id="i-sheet" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M4 9h16M4 15h16M10 3v18"/></symbol>
- <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></symbol>
+  <symbol id="i-won" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M7.6 8l1.9 8 2.5-6.2 2.5 6.2 1.9-8M6.6 11.3h10.8M6.6 13.6h10.8"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></symbol>
   <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20.5a2 2 0 0 0 4 0"/></symbol>
 </svg>
 
@@ -294,8 +295,8 @@ section[data-page]{display:none} section[data-page].on{display:block}
   <!-- 홈 -->
   <section data-page="home" class="on">
     <div class="notecard">
-      <svg class="emblem i" viewBox="0 0 24 24"><use href="#i-dollar"/></svg>
-      <div class="nc-top"><span class="nc-label">현재 남은 금액</span><span class="nc-cad">CAD</span></div>
+      <svg class="emblem i" viewBox="0 0 24 24"><use id="ncEmblem" href="#i-dollar"/></svg>
+      <div class="nc-top"><span class="nc-label">현재 남은 금액</span><span class="nc-cad" id="ncCur">CAD</span></div>
       <div class="big num" id="balance">$0.00</div>
       <div class="seg" id="periodSeg">
         <button data-p="all" class="on">전체</button><button data-p="day">오늘</button><button data-p="week">이번 주</button><button data-p="month">이번 달</button>
@@ -380,11 +381,23 @@ section[data-page]{display:none} section[data-page].on{display:block}
 
   <!-- 설정 -->
   <section data-page="settings">
-    <h2>직장주급</h2>
+    <h2>통화</h2>
+    <div class="card pad">
+      <label class="field"><span>돈 단위</span><select id="sCurrency"></select></label>
+      <p class="note" style="margin:2px 2px 0">원(KRW)으로 하면 "45,670원", "사만오천육백칠십 원"처럼 말할 수 있어요. 통화를 바꿔도 기록은 지워지지 않고, 고른 통화로 저장한 기록만 보여요.</p>
+    </div>
+
+    <h2>급여</h2>
     <div class="card pad">
       <div class="grid2">
-        <label class="field"><span>첫 지급일 (수요일)</span><input type="date" id="sFirstPay"></label>
-        <label class="field"><span>입금 가능 시각</span><input type="time" id="sPayTime"></label>
+        <label class="field"><span>이름</span><input id="sPayName" placeholder="예) 월급, 직장주급"></label>
+        <label class="field"><span>주기</span>
+          <select id="sPayCycle"><option value="biweekly">2주마다</option><option value="weekly">매주</option><option value="monthly">매달</option><option value="none">쓰지 않음</option></select></label>
+      </div>
+      <div class="grid2">
+        <label class="field" id="payFirstF"><span>첫 지급일</span><input type="date" id="sFirstPay"></label>
+        <label class="field" id="payDayF"><span>매달 지급일</span><select id="sPayDay"><option value="1">1일</option><option value="2">2일</option><option value="3">3일</option><option value="4">4일</option><option value="5">5일</option><option value="6">6일</option><option value="7">7일</option><option value="8">8일</option><option value="9">9일</option><option value="10">10일</option><option value="11">11일</option><option value="12">12일</option><option value="13">13일</option><option value="14">14일</option><option value="15">15일</option><option value="16">16일</option><option value="17">17일</option><option value="18">18일</option><option value="19">19일</option><option value="20">20일</option><option value="21">21일</option><option value="22">22일</option><option value="23">23일</option><option value="24">24일</option><option value="25">25일</option><option value="26">26일</option><option value="27">27일</option><option value="28">28일</option><option value="29">29일</option><option value="30">30일</option><option value="31">31일</option><option value="0">말일</option></select></label>
+        <label class="field" id="payTimeF"><span>입금 가능 시각</span><input type="time" id="sPayTime"></label>
       </div>
       <div class="note" id="nextPay"></div>
     </div>
@@ -419,7 +432,7 @@ section[data-page]{display:none} section[data-page].on{display:block}
     </div>
   </section>
 
-  <p class="ver" id="verLine">오늘 얼마 썼어? v0.9.2</p>
+  <p class="ver" id="verLine">오늘 얼마 썼어? v0.9.3</p>
 </div>
 
 <nav class="tabs" id="tabs">
@@ -452,7 +465,7 @@ section[data-page]{display:none} section[data-page].on{display:block}
     <button type="button" class="mini plain" id="fDescReset">기본 문장으로</button>
   </div>
   <div class="grid2">
-    <label class="field"><span>금액 ($)</span><input id="fAmount" inputmode="decimal" placeholder="0.00"></label>
+    <label class="field"><span id="fAmountL">금액 ($)</span><input id="fAmount" inputmode="decimal" placeholder="0.00"></label>
     <label class="field"><span>카테고리</span><select id="fCategory"></select></label>
   </div>
   <div class="grid2">
