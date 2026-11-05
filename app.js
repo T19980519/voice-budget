@@ -1,10 +1,11 @@
-/* 오늘 얼마 썼어? v0.9.3 — 모든 데이터는 이 폰(localStorage)에만 저장 */
+/* 오늘 얼마 썼어? v0.9.4 — 모든 데이터는 이 폰(localStorage)에만 저장 */
 (function () {
   'use strict';
   const P = window.VBParser;
   const $ = (id) => document.getElementById(id);
   const KEY_REC = 'vb.records.v1', KEY_SET = 'vb.settings.v1', KEY_NOTI = 'vb.notified.v1';
   const IS_PREVIEW = !!window.VB_PREVIEW; // claude.ai 미리보기 모드
+  const IS_IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const CATS = ['커피', '식비', '장보기', '교통', '전자제품', '생활용품', '쇼핑', '통신/구독', '주거', '의료', '여가', '교육', '선물/경조사', '수입', '기타'];
 
   // ---------- 문구 ({이름} 자리에 값 넣기) ----------
@@ -441,7 +442,7 @@
   function setupStatic() {
     $('askChips').innerHTML = CHIPS.map((c) => `<button>${esc(c)}</button>`).join('');
     $('fCategory').innerHTML = CATS.map((c) => `<option value="${c}">${esc(c)}</option>`).join('');
-    $('verLine').textContent = '오늘 얼마 썼어? v0.9.3' + (IS_PREVIEW ? ' · 미리보기 (기록은 이 화면에만 저장)' : '');
+    $('verLine').textContent = '오늘 얼마 썼어? v0.9.4' + (IS_PREVIEW ? ' · 미리보기 (기록은 이 화면에만 저장)' : '');
     $('sCurrency').innerHTML = Object.entries(CURRENCIES).map(([c, l]) => `<option value="${c}">${esc(l)}</option>`).join('');
     applyCurrencyUI();
   }
@@ -865,10 +866,10 @@
     const standalone = navigator.standalone || matchMedia('(display-mode: standalone)').matches;
     let msg;
     if (IS_PREVIEW) msg = T('미리보기에서는 알림이 지원되지 않아요. 홈 화면 앱으로 설치하면 켤 수 있어요.');
-    else if (!standalone) msg = T('Safari 공유 버튼 → "홈 화면에 추가" 후, 홈 화면 아이콘으로 열어야 알림을 켤 수 있어요.');
-    else if (!ok) msg = T('이 기기에서는 알림을 지원하지 않아요 (iOS 16.4 이상 필요).');
+    else if (!standalone) msg = IS_IOS ? 'Safari 공유 버튼 → "홈 화면에 추가" 후, 홈 화면 아이콘으로 열어야 알림을 켤 수 있어요.' : 'Chrome 메뉴(⋮) → "홈 화면에 추가" 또는 "앱 설치" 후, 홈 화면 아이콘으로 열어야 알림을 켤 수 있어요.';
+    else if (!ok) msg = IS_IOS ? '이 기기에서는 알림을 지원하지 않아요 (iOS 16.4 이상 필요).' : '이 기기에서는 알림을 지원하지 않아요.';
     else if (Notification.permission === 'granted') msg = T('알림 켜짐. 앱을 열 때 지난 일간·주간·월간 요약과 주급일 알림이 와요.');
-    else if (Notification.permission === 'denied') msg = T('알림이 꺼져 있어요. 아이폰 설정 → 알림 → 가계부에서 켜주세요.');
+    else if (Notification.permission === 'denied') msg = IS_IOS ? '알림이 꺼져 있어요. 아이폰 설정 → 알림 → 오늘 얼마 썼어?에서 켜주세요.' : '알림이 꺼져 있어요. 휴대폰 설정 → 애플리케이션 → 오늘 얼마 썼어? → 알림에서 켜주세요.';
     else msg = T('버튼을 눌러 알림을 허용해주세요.');
     $('notifyNote').textContent = msg;
     $('btnNotify').hidden = IS_PREVIEW || !(ok && standalone && Notification.permission === 'default');
@@ -926,6 +927,19 @@
     renderNotifyState();
   }
   $('sCurrency').addEventListener('change', (e) => switchCurrency(e.target.value));
+  // ---------- 앱 소개 · 지인에게 보내기 ----------
+  const INTRO_URL = IS_PREVIEW ? 'https://t19980519.github.io/voice-budget/intro.html' : new URL('intro.html', location.href).href;
+  $('btnIntro').href = INTRO_URL;
+  if (IS_PREVIEW) $('btnIntro').target = '_blank';
+  $('btnShareIntro').onclick = async () => {
+    const text = '말로 쓰는 가계부 앱이에요. "코스트코 장보기 152불", "이마트 사만오천 원"처럼 말하면 알아서 적어줘요. 무료 · 가입 없음 · 기록은 내 폰에만.';
+    if (navigator.share) {
+      try { await navigator.share({ title: '오늘 얼마 썼어? — 말로 쓰는 가계부', text, url: INTRO_URL }); return; }
+      catch (e) { if (e && e.name === 'AbortError') return; }
+    }
+    try { await navigator.clipboard.writeText(text + '\n' + INTRO_URL); toast('소개 글과 링크를 복사했어요. 카톡에 붙여넣기 하세요', 3000); }
+    catch (e) { toast(INTRO_URL, 6000); }
+  };
   [['sFirstPay', 'firstPay'], ['sPayTime', 'payTime'], ['sNotifyTime', 'notifyTime'], ['sWeekStart', 'weekStart'], ['sPayName', 'payName'], ['sPayCycle', 'payCycle'], ['sPayDay', 'payDay']].forEach(([id, k]) =>
     $(id).addEventListener('change', (e) => {
       const v = String(e.target.value).trim();

@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>오늘 얼마 썼어? — 말로 쓰는 가계부</title>
+<meta name="description" content="말 한마디로 끝나는 가계부. 무료, 가입 없음, 기록은 내 폰 안에만. 아이폰·갤럭시, 원·달러 모두 지원.">
+<meta property="og:title" content="오늘 얼마 썼어? — 말로 쓰는 가계부">
+<meta property="og:description" content="&quot;코스트코에서 장보기 152불&quot;, &quot;이마트 사만오천 원&quot; 말하면 끝. 무료 · 가입 없음 · 광고 없음">
+<meta property="og:image" content="icons/icon-512.png">
+<meta name="theme-color" content="#22634d">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<style>
+:root{
+  --bg:#eef1ec; --card:#ffffff; --ink:#13201b; --muted:#5d6a64; --line:#dde3dd; --field:#f4f6f2;
+  --note:#22634d; --note-2:#164735; --note-ink:#f2eee2; --gold:#b8914a; --gold-hi:#e2c88f; --gold-ink:#7a5c22;
+  --in:#1b7550; --out:#9e3238; --accent:#1f5a45; --accent-ink:#f2eee2;
+  --sans:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;
+  --shadow:0 1px 1px rgba(19,32,27,.04),0 10px 30px -12px rgba(19,32,27,.18);
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0c1311; --card:#141d1a; --ink:#e8eee9; --muted:#97a59e; --line:#22302b; --field:#1a2521;
+  --note:#256a53; --note-2:#17473a; --gold:#d4b06a; --gold-hi:#ecd49c; --gold-ink:#e2c88f;
+  --in:#62cc9a; --out:#f08d88; --accent:#e2c88f; --accent-ink:#13201b; --shadow:none; color-scheme:dark; } }
+:root[data-theme="dark"]{
+  --bg:#0c1311; --card:#141d1a; --ink:#e8eee9; --muted:#97a59e; --line:#22302b; --field:#1a2521;
+  --note:#256a53; --note-2:#17473a; --gold:#d4b06a; --gold-hi:#ecd49c; --gold-ink:#e2c88f;
+  --in:#62cc9a; --out:#f08d88; --accent:#e2c88f; --accent-ink:#13201b; --shadow:none; color-scheme:dark; }
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink)}
+body{font-family:var(--sans);font-size:16px;line-height:1.6;word-break:keep-all;overflow-wrap:anywhere}
+button{font:inherit;color:inherit;cursor:pointer}
+a{color:inherit}
+button:focus-visible,a:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.wrap{max-width:620px;margin:0 auto;padding:12px max(16px,env(safe-area-inset-right)) calc(40px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}
+.num{font-variant-numeric:tabular-nums}
+
+header{display:flex;align-items:center;gap:10px;padding:8px 2px}
+header svg{width:36px;height:36px;flex:none}
+header b{font-size:19px;letter-spacing:-.3px}
+header span{display:block;font-size:12px;color:var(--muted);line-height:1.3}
+
+/* 첫 화면 */
+.hero{position:relative;overflow:hidden;border-radius:24px;margin:10px 0 18px;padding:24px 20px 20px;color:var(--note-ink);
+  background:repeating-radial-gradient(circle at 92% 14%, rgba(226,200,143,.07) 0 1px, transparent 1.2px 6px),linear-gradient(150deg,var(--note),var(--note-2));
+  box-shadow:0 18px 36px -18px rgba(22,71,53,.55)}
+.hero::before{content:"";position:absolute;inset:8px;border:1px solid rgba(226,200,143,.38);border-radius:18px;pointer-events:none}
+.hero h1{position:relative;font-size:30px;line-height:1.25;margin:0 0 8px;letter-spacing:-.8px}
+.hero h1 em{font-style:normal;color:var(--gold-hi)}
+.hero p{position:relative;margin:0 0 16px;color:rgba(242,238,226,.82);font-size:15px}
+.say{position:relative;display:grid;gap:8px;margin:0 0 18px}
+.bubble{justify-self:start;max-width:92%;background:rgba(242,238,226,.95);color:#13201b;border-radius:18px 18px 18px 6px;padding:9px 14px;font-size:15px;display:flex;gap:8px;align-items:center}
+.bubble svg{width:18px;height:18px;flex:none;color:var(--out)}
+.rec{justify-self:end;max-width:92%;background:rgba(255,255,255,.1);border:1px dashed rgba(226,200,143,.6);border-radius:18px 18px 6px 18px;padding:9px 14px;font-size:14px;display:flex;gap:12px;align-items:center;justify-content:space-between}
+.rec b{color:var(--gold-hi)}
+.rec .a{font-weight:700;white-space:nowrap}
+.ctas{position:relative;display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:14px;padding:13px 12px;font-weight:700;font-size:16px;text-decoration:none;text-align:center}
+.btn svg{width:20px;height:20px;flex:none}
+.btn.gold{background:linear-gradient(150deg,var(--gold-hi),var(--gold));color:#2b1f08}
+.btn.ghost{background:rgba(242,238,226,.12);color:var(--note-ink);border:1px solid rgba(226,200,143,.45)}
+.btn.solid{background:var(--accent);color:var(--accent-ink)}
+.btn.line{background:var(--card);color:var(--ink);border:1px solid var(--line)}
+.badges{position:relative;display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
+.badges span{font-size:12px;border:1px solid rgba(226,200,143,.5);color:var(--gold-hi);border-radius:999px;padding:3px 10px}
+
+h2{font-size:21px;letter-spacing:-.4px;margin:34px 2px 4px;line-height:1.35}
+.sub{color:var(--muted);margin:0 2px 12px;font-size:15px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:20px;box-shadow:var(--shadow);padding:16px;margin:10px 0}
+
+/* 이런 분께 */
+.who{display:grid;gap:8px;margin:0;padding:0;list-style:none}
+.who li{display:flex;gap:10px;align-items:flex-start;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px 14px}
+.who li::before{content:"";flex:none;width:8px;height:8px;border-radius:50%;background:var(--gold);margin-top:9px}
+
+/* 탭 */
+.seg{display:flex;background:var(--field);border:1px solid var(--line);border-radius:12px;padding:3px;margin:4px 0 12px}
+.seg button{flex:1;border:0;background:none;padding:8px 4px;border-radius:9px;font-size:14px;color:var(--muted)}
+.seg button[aria-selected="true"]{background:var(--card);color:var(--ink);font-weight:700;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+
+/* 단계 */
+.steps{display:grid;gap:10px;margin:0;padding:0;list-style:none;counter-reset:s}
+.steps>li{counter-increment:s;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px 16px 14px 56px;position:relative}
+.steps>li::before{content:counter(s);position:absolute;left:14px;top:14px;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:15px;
+  background:linear-gradient(150deg,var(--gold-hi),var(--gold));color:#2b1f08}
+.steps b.t{display:block;font-size:17px;margin-bottom:2px}
+.steps p{margin:0;color:var(--muted);font-size:15px}
+.ex{display:grid;gap:6px;margin-top:10px}
+.ex div{background:var(--field);border-radius:12px;padding:8px 12px;font-size:14.5px}
+.ex div .k{color:var(--muted);font-size:12px;display:block;line-height:1.3}
+.ex div q{quotes:"“" "”"}
+.ex div strong{color:var(--ink)}
+
+/* 기능 */
+.feats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.feat{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px}
+.feat .ic{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;background:var(--field);color:var(--gold-ink);margin-bottom:8px}
+.feat .ic svg{width:20px;height:20px}
+.feat b{display:block;font-size:15.5px;line-height:1.35;margin-bottom:3px}
+.feat p{margin:0;font-size:13.5px;color:var(--muted);line-height:1.5}
+@media (max-width:360px){.feats{grid-template-columns:1fr}}
+
+/* 비교 */
+.cmp{width:100%;border-collapse:separate;border-spacing:0;font-size:14px;background:var(--card);border:1px solid var(--line);border-radius:18px;overflow:hidden}
+.cmp th,.cmp td{padding:11px 10px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}
+.cmp tr:last-child th,.cmp tr:last-child td{border-bottom:0}
+.cmp thead th{font-size:13px;color:var(--muted);background:var(--field)}
+.cmp thead th.me{color:var(--gold-ink)}
+.cmp tbody th{font-weight:700;white-space:nowrap;width:22%}
+.cmp td.me{background:color-mix(in srgb, var(--gold) 9%, transparent);font-weight:600}
+.cmp td.other{color:var(--muted)}
+
+/* 솔직히 */
+.honest{display:grid;gap:8px;margin:0;padding:0;list-style:none}
+.honest li{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px 14px;font-size:15px}
+.honest li b{display:block}
+.honest li span{color:var(--muted);font-size:14px}
+
+/* 설치 */
+.inst{display:grid;gap:8px;margin:0;padding:0;list-style:none;counter-reset:i}
+.inst li{counter-increment:i;display:flex;gap:12px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--line)}
+.inst li:last-child{border-bottom:0}
+.inst li::before{content:counter(i);flex:none;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:13px;font-weight:800;background:var(--accent);color:var(--accent-ink);margin-top:1px}
+.inst li small{display:block;color:var(--muted);font-size:13.5px}
+.kbd{display:inline-flex;align-items:center;gap:3px;border:1px solid var(--line);background:var(--field);border-radius:7px;padding:0 6px;font-size:13.5px;font-weight:700;white-space:nowrap}
+.kbd svg{width:14px;height:14px}
+.tipbox{background:color-mix(in srgb, var(--gold) 12%, var(--card));border:1px solid color-mix(in srgb, var(--gold) 45%, transparent);border-radius:14px;padding:10px 12px;font-size:14px;margin-top:10px}
+.tipbox b{color:var(--gold-ink)}
+
+.first{display:grid;gap:8px}
+.first div{display:flex;gap:12px;align-items:flex-start}
+.first svg{width:22px;height:22px;flex:none;color:var(--gold-ink);margin-top:2px}
+
+.final{text-align:center;margin-top:34px}
+.final p{color:var(--muted);font-size:14px;margin:10px 0 0}
+.final .ctas{max-width:420px;margin:12px auto 0}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(16px);background:var(--accent);color:var(--accent-ink);
+  padding:10px 16px;border-radius:999px;font-size:14px;opacity:0;transition:.2s;max-width:90vw;text-align:center;pointer-events:none;z-index:9}
+.toast.on{opacity:1;transform:translateX(-50%)}
+@media (prefers-reduced-motion: reduce){.toast{transition:none}}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="mic" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M9 21h6"/></g></symbol>
+  <symbol id="share" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7.5 7.5 12 3l4.5 4.5"/><path d="M5 11v8.5A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V11"/></g></symbol>
+  <symbol id="open" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M11 18.5h2"/></g></symbol>
+  <symbol id="layers" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/></g></symbol>
+  <symbol id="cal" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></g></symbol>
+  <symbol id="ask" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2M9.2 9.3a1.9 1.9 0 0 1 3.6.7c0 1.2-1.8 1.5-1.8 2.6M11 14.3v.1"/></g></symbol>
+  <symbol id="coins" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="7" ry="2.6"/><path d="M5 6v4c0 1.4 3.1 2.6 7 2.6s7-1.2 7-2.6V6M5 10v4c0 1.4 3.1 2.6 7 2.6s7-1.2 7-2.6v-4M5 14v4c0 1.4 3.1 2.6 7 2.6s7-1.2 7-2.6v-4"/></g></symbol>
+  <symbol id="learn" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></g></symbol>
+  <symbol id="bars" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16M7 16V9M12 16V5M17 16v-4"/></g></symbol>
+  <symbol id="bell" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20.5a2 2 0 0 0 4 0"/></g></symbol>
+  <symbol id="sheet" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M4 9h16M4 15h16M10 3v18"/></g></symbol>
+  <symbol id="people" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M16 4.8a3.2 3.2 0 0 1 0 6.4M18 14.4c1.8.8 3 2.6 3 4.6"/></g></symbol>
+  <symbol id="lock" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/></g></symbol>
+  <symbol id="gear" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></g></symbol>
+  <symbol id="save" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5"/><path d="M4 17v2.5A1.5 1.5 0 0 0 5.5 21h13a1.5 1.5 0 0 0 1.5-1.5V17"/></g></symbol>
+  <symbol id="dots" viewBox="0 0 24 24"><g fill="currentColor"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></g></symbol>
+</svg>
+
+<div class="wrap">
+  <header>
+    <svg viewBox="0 0 34 34" aria-hidden="true">
+      <defs><linearGradient id="gm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ecd49c"/><stop offset="1" stop-color="#b8914a"/></linearGradient></defs>
+      <path d="M17 3a13 13 0 1 1-7.6 23.6L4 29l1.9-5A13 13 0 0 1 17 3z" fill="url(#gm)"/>
+      <circle cx="17" cy="16" r="9.6" fill="none" stroke="#7a5c22" stroke-width="1" opacity=".55"/>
+      <path d="M19.7 13.1c-.5-1-1.5-1.6-2.7-1.6-1.5 0-2.6.8-2.6 2s1 1.7 2.6 2.1 2.8.9 2.8 2.2-1.2 2.2-2.8 2.2c-1.2 0-2.3-.6-2.8-1.6M17 10v1.5M17 20.1v1.5" fill="none" stroke="#3b2a0b" stroke-width="1.7" stroke-linecap="round"/>
+    </svg>
+    <div><b>오늘 얼마 썼어?</b><span>말로 쓰는 가계부</span></div>
+  </header>
+
+  <section class="hero">
+    <h1>가계부, 이제 <em>말 한마디</em>로 끝내세요</h1>
+    <p>버튼 하나 누르고 평소 말투로 말하면, 어디서 무엇을 얼마에 샀는지 알아서 나눠 적어 줘요.</p>
+    <div class="say" data-cur-block>
+      <div class="bubble"><svg><use href="#mic"/></svg><span data-cad>“코스트코에서 장보기 152불 37센트”</span><span data-krw hidden>“이마트에서 장보기 사만오천육백칠십 원”</span></div>
+      <div class="rec"><span data-cad><b>코스트코</b>에서 장을 봤어요</span><span data-krw hidden><b>이마트</b>에서 장을 봤어요</span><span class="a num"><span data-cad>-$152.37</span><span data-krw hidden>-45,670원</span></span></div>
+    </div>
+    <div class="ctas">
+      <a class="btn gold" href="./"><svg><use href="#open"/></svg>앱 열기</a>
+      <button class="btn ghost" data-share><svg><use href="#share"/></svg>지인에게 보내기</button>
+    </div>
+    <div class="badges"><span>무료</span><span>가입 없음</span><span>광고 없음</span><span>기록은 내 폰에만</span><span>아이폰 · 갤럭시</span><span>원 · 달러</span></div>
+  </section>
+
+  <h2>이런 분께 좋아요</h2>
+  <ul class="who">
+    <li>가계부를 몇 번 시작했다가, 하나하나 입력하기 귀찮아서 그만둔 분</li>
+    <li>"이번 달 커피값이 얼마였지?", "그 배터리 언제 샀더라?"가 늘 궁금한 분</li>
+    <li>은행·카드 앱을 연결하는 건 부담스럽고, 쓴 돈만 간단히 적고 싶은 분</li>
+    <li>한국어로 편하게 말하고 싶은 분 — 캐나다에서도, 한국에서도</li>
+  </ul>
+
+  <h2>이렇게 써요</h2>
+  <p class="sub">예시를 보고 싶은 곳을 고르세요.</p>
+  <div class="seg" role="tablist" aria-label="예시 통화">
+    <button role="tab" data-cur="CAD" aria-selected="true">캐나다 (달러)</button>
+    <button role="tab" data-cur="KRW" aria-selected="false">한국 (원)</button>
+  </div>
+  <ol class="steps">
+    <li><b class="t">지출 버튼을 누르고 말하기</b><p>평소 말투 그대로 괜찮아요. 몇 건을 한 번에 말해도 나눠서 적어요.</p>
+      <div class="ex" data-cad>
+        <div><span class="k">말한 그대로</span><q>팀홀튼 커피 2불 15</q></div>
+        <div><span class="k">함께한 사람·식사까지</span><q>수환 형님하고 코리아하우스에서 저녁 먹었어 85불</q></div>
+        <div><span class="k">여러 건 한 번에</span><q>모기지 2100불 그다음 관리비 650불</q></div>
+      </div>
+      <div class="ex" data-krw hidden>
+        <div><span class="k">말한 그대로</span><q>메가커피 아메리카노 2,000원</q></div>
+        <div><span class="k">함께한 사람·식사까지</span><q>친구랑 김밥천국에서 점심 먹었어 만 이천 원</q></div>
+        <div><span class="k">여러 건 한 번에</span><q>월세 육십오만 원 그다음 관리비 이십오만 삼천 원</q></div>
+      </div>
+    </li>
+    <li><b class="t">확인하고 저장</b><p>앱이 알아들은 내용을 문장으로 보여줘요. 맞으면 저장, 틀리면 고치면 돼요. 고친 말은 다음부터 기억해요.</p>
+      <div class="ex" data-cad><div><span class="k">이렇게 기록돼요</span><strong>수환 형님</strong>과 <strong>코리아하우스</strong>에서 <strong>저녁식사</strong>를 했어요 · $85.00</div></div>
+      <div class="ex" data-krw hidden><div><span class="k">이렇게 기록돼요</span><strong>친구</strong>와 <strong>김밥천국</strong>에서 <strong>점심식사</strong>를 했어요 · 12,000원</div></div>
+    </li>
+    <li><b class="t">궁금하면 물어보기</b><p>목록을 뒤질 필요 없이 질문하면 계산해서 알려줘요.</p>
+      <div class="ex" data-cad>
+        <div><q>이번 달 커피 지출은 총 얼마야?</q></div>
+        <div><q>내가 언제 베스트바이에서 배터리를 얼마에 샀지?</q></div>
+        <div><q>지난주 토요일 얼마 썼어?</q></div>
+      </div>
+      <div class="ex" data-krw hidden>
+        <div><q>이번 달 식비 얼마 썼어?</q></div>
+        <div><q>쿠팡에서 언제 뭐 샀지?</q></div>
+        <div><q>이번 달 어디에 제일 많이 썼어?</q></div>
+      </div>
+    </li>
+  </ol>
+
+  <h2>이런 것도 알아들어요</h2>
+  <div class="feats">
+    <div class="feat"><div class="ic"><svg><use href="#cal"/></svg></div><b>깜빡한 지난 날짜</b><p>“어제”, “지난 금요일”, “10월 31일” 이라고 말하면 그 날짜로 적어요.</p></div>
+    <div class="feat"><div class="ic"><svg><use href="#coins"/></svg></div><b>원 · 달러</b><p>“1불99”, “5불 45센트”, “사만오천육백칠십 원”, “3억” 모두 OK.</p></div>
+    <div class="feat"><div class="ic"><svg><use href="#people"/></svg></div><b>누구와, 어떤 식사</b><p>“김부장님이랑 점심” 처럼 말하면 사람과 식사도 따로 기록.</p></div>
+    <div class="feat"><div class="ic"><svg><use href="#learn"/></svg></div><b>고친 말을 배워요</b><p>받아쓰기가 틀린 가게 이름·물건을 한 번 고치면 다음부터 알아서.</p></div>
+    <div class="feat"><div class="ic"><svg><use href="#bars"/></svg></div><b>예산과 차트</b><p>식비·커피 한도를 정하면 80%·100%에서 알려주고, 지난달과 비교해 보여줘요.</p></div>
+    <div class="feat"><div class="ic"><svg><use href="#bell"/></svg></div><b>요약 · 월급날 알림</b><p>하루·한 주·한 달 합계와 월급(주급) 입금일을 알려줘요.</p></div>
+    <div class="feat"><div class="ic"><svg><use href="#sheet"/></svg></div><b>엑셀로 내보내기</b><p>달마다 요약과 전체 기록을 엑셀 파일로 받아요.</p></div>
+    <div class="feat"><div class="ic"><svg><use href="#layers"/></svg></div><b>자동 분류</b><p>커피·식비·장보기·교통·주거 등 15가지로 알아서 나눠요.</p></div>
+  </div>
+
+  <h2>다른 가계부 앱과 다른 점</h2>
+  <p class="sub">흔히 쓰는 가계부 앱과 비교하면 이래요.</p>
+  <table class="cmp">
+    <thead><tr><th scope="col"></th><th scope="col">흔한 가계부 앱</th><th scope="col" class="me">오늘 얼마 썼어?</th></tr></thead>
+    <tbody>
+      <tr><th scope="row">입력</th><td class="other">금액·분류·가게를 칸마다 눌러서 입력</td><td class="me">한 문장 말하면 끝</td></tr>
+      <tr><th scope="row">가입</th><td class="other">회원가입·로그인이 필요한 경우가 많음</td><td class="me">가입 없음</td></tr>
+      <tr><th scope="row">은행 연결</th><td class="other">계좌·카드 연결을 권하는 경우가 많음</td><td class="me">연결 안 함</td></tr>
+      <tr><th scope="row">내 기록</th><td class="other">회사 서버에 저장되는 경우가 많음</td><td class="me">내 폰 안에만</td></tr>
+      <tr><th scope="row">비용</th><td class="other">광고나 유료 구독이 붙기도 함</td><td class="me">무료, 광고 없음</td></tr>
+      <tr><th scope="row">한국어</th><td class="other">메뉴에서 골라야 함</td><td class="me">“밧데리”, “1불99” 같은 말투 그대로</td></tr>
+      <tr><th scope="row">찾기</th><td class="other">목록을 넘기며 찾기</td><td class="me">물어보면 답해 줌</td></tr>
+    </tbody>
+  </table>
+
+  <h2>솔직히 알려드려요</h2>
+  <ul class="honest">
+    <li><b>카드·은행 내역을 자동으로 가져오지 않아요.</b><span>내가 말한 것만 적어요. 그래서 더 가볍고 안전하지만, 쓴 돈은 직접 말해야 해요.</span></li>
+    <li><b>기록은 그 폰 안에만 있어요.</b><span>폰을 바꾸거나 앱을 지우기 전에 설정 → "백업 파일 저장"을 꼭 해 두세요. 한 달에 한 번 권해요.</span></li>
+    <li><b>받아쓰기는 가끔 틀려요.</b><span>저장 전에 한 번 확인하세요. 고친 말은 앱이 기억해요.</span></li>
+    <li><b>앱스토어 앱이 아니에요.</b><span>웹 주소를 홈 화면에 추가해서 앱처럼 써요. 설치는 아래처럼 1분이면 돼요.</span></li>
+  </ul>
+
+  <h2>설치하기 (1분)</h2>
+  <div class="seg" role="tablist" aria-label="휴대폰 종류">
+    <button role="tab" data-os="ios" aria-selected="true">아이폰</button>
+    <button role="tab" data-os="android" aria-selected="false">갤럭시 (안드로이드)</button>
+  </div>
+  <div class="card" data-os-panel="ios">
+    <ol class="inst">
+      <li><div><b>Safari</b>로 이 페이지를 열어요<small>카카오톡에서 열었다면 오른쪽 아래 <span class="kbd"><svg><use href="#share"/></svg></span> 또는 <span class="kbd">⋯</span> → "Safari로 열기"</small></div></li>
+      <li><div>화면 아래 <span class="kbd"><svg><use href="#share"/></svg> 공유</span> 버튼을 눌러요</div></li>
+      <li><div>목록을 내려서 <span class="kbd">홈 화면에 추가</span> → <span class="kbd">추가</span><small>영어 설정이면 "Add to Home Screen"</small></div></li>
+      <li><div>홈 화면의 <b>오늘 얼마 썼어?</b> 아이콘으로 열고, 처음 마이크를 누를 때 <b>허용</b>을 눌러요</div></li>
+    </ol>
+  </div>
+  <div class="card" data-os-panel="android" hidden>
+    <ol class="inst">
+      <li><div><b>Chrome</b>으로 이 페이지를 열어요<small>카카오톡에서 열었다면 오른쪽 위 <span class="kbd"><svg><use href="#dots"/></svg></span> → "다른 브라우저로 열기"</small></div></li>
+      <li><div>오른쪽 위 <span class="kbd"><svg><use href="#dots"/></svg></span> 메뉴를 눌러요</div></li>
+      <li><div><span class="kbd">홈 화면에 추가</span> 또는 <span class="kbd">앱 설치</span> → <span class="kbd">설치</span><small>삼성 인터넷이면 아래 메뉴 <span class="kbd">≡</span> → "현재 페이지 추가" → "홈 화면"</small></div></li>
+      <li><div>홈 화면의 <b>오늘 얼마 썼어?</b> 아이콘으로 열고, 처음 마이크를 누를 때 <b>허용</b>을 눌러요</div></li>
+    </ol>
+  </div>
+  <div class="tipbox"><b>마이크가 안 되면?</b> 입력칸을 누르고 키보드의 🎤 버튼으로 말해도 똑같이 기록돼요.</div>
+
+  <h2>처음 한 번만 설정</h2>
+  <div class="card first">
+    <div><svg><use href="#coins"/></svg><span><b>설정 → 통화</b>에서 원(한국) 또는 달러(캐나다·미국)를 골라요.</span></div>
+    <div><svg><use href="#gear"/></svg><span><b>설정 → 급여</b>에 월급날(매달 25일, 2주마다 등)을 넣으면 그날 알려줘요. 안 써도 돼요.</span></div>
+    <div><svg><use href="#save"/></svg><span><b>설정 → 백업 파일 저장</b>을 한 달에 한 번 해 두면 안심이에요.</span></div>
+    <div><svg><use href="#lock"/></svg><span>기록은 서버로 보내지 않고 <b>내 폰에만</b> 저장돼요. 보내 준 사람도 내 기록을 볼 수 없어요.</span></div>
+  </div>
+
+  <div class="final">
+    <div class="ctas">
+      <a class="btn solid" href="./"><svg><use href="#open"/></svg>앱 열기</a>
+      <button class="btn line" data-share><svg><use href="#share"/></svg>지인에게 보내기</button>
+    </div>
+    <p>지인이 직접 만들어 쓰는 앱이에요. 이상하게 기록되는 말이 있으면 보내 준 사람에게 알려주세요.<br>더 잘 알아듣게 고쳐 드려요.</p>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(function () {
+  'use strict';
+  const $$ = (s) => Array.from(document.querySelectorAll(s));
+  const store = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
+
+  // 예시 통화: 앱 설정 → 시간대 순으로 추측
+  function guessCur() {
+    try { const s = JSON.parse(store.get('vb.settings.v1') || 'null'); if (s && s.currency) return s.currency === 'KRW' ? 'KRW' : 'CAD'; } catch (e) {}
+    try { if (/Asia\/Seoul/.test(Intl.DateTimeFormat().resolvedOptions().timeZone)) return 'KRW'; } catch (e) {}
+    return 'CAD';
+  }
+  function setCur(c) {
+    $$('[data-cur]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.cur === c)));
+    $$('[data-cad]').forEach((e) => { e.hidden = c !== 'CAD'; });
+    $$('[data-krw]').forEach((e) => { e.hidden = c !== 'KRW'; });
+  }
+  $$('[data-cur]').forEach((b) => b.addEventListener('click', () => setCur(b.dataset.cur)));
+  setCur(guessCur());
+
+  // 설치 안내: 휴대폰 종류 자동 선택
+  const isAndroid = /Android/i.test(navigator.userAgent);
+  function setOS(o) {
+    $$('[data-os]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.os === o)));
+    $$('[data-os-panel]').forEach((p) => { p.hidden = p.dataset.osPanel !== o; });
+  }
+  $$('[data-os]').forEach((b) => b.addEventListener('click', () => setOS(b.dataset.os)));
+  setOS(isAndroid ? 'android' : 'ios');
+
+  // 지인에게 보내기: 휴대폰 공유창(카톡·문자) → 안 되면 링크 복사
+  let tT;
+  function toast(m) { const t = document.getElementById('toast'); t.textContent = m; t.classList.add('on'); clearTimeout(tT); tT = setTimeout(() => t.classList.remove('on'), 2600); }
+  const url = location.href.split('#')[0].split('?')[0];
+  const text = '말로 쓰는 가계부 앱이에요. "코스트코 장보기 152불", "이마트 사만오천 원"처럼 말하면 알아서 적어줘요. 무료 · 가입 없음 · 기록은 내 폰에만.';
+  $$('[data-share]').forEach((b) => b.addEventListener('click', async () => {
+    if (navigator.share) {
+      try { await navigator.share({ title: '오늘 얼마 썼어? — 말로 쓰는 가계부', text, url }); return; }
+      catch (e) { if (e && e.name === 'AbortError') return; }
+    }
+    try { await navigator.clipboard.writeText(text + '\n' + url); toast('소개 글과 링크를 복사했어요. 카톡에 붙여넣기 하세요'); }
+    catch (e) { prompt('이 링크를 복사해서 보내세요', url); }
+  }));
+})();
+</script>
+</body>
+</html>
