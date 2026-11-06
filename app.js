@@ -1,11 +1,11 @@
-/* 오늘 얼마 썼어? v1.0.5 · Developed by SEOKWOO KIM — 모든 데이터는 이 폰(localStorage)에만 저장 */
+/* 오늘 얼마 썼어? v1.0.6 · Developed by SEOKWOO KIM — 모든 데이터는 이 폰(localStorage)에만 저장 */
 (function () {
   'use strict';
   const P = window.VBParser;
   const $ = (id) => document.getElementById(id);
   const KEY_REC = 'vb.records.v1', KEY_SET = 'vb.settings.v1', KEY_NOTI = 'vb.notified.v1';
   const IS_PREVIEW = !!window.VB_PREVIEW; // claude.ai 미리보기 모드
-  const APP_VERSION = '1.0.5'; // 배포 때 version.json·index.html·sw.js와 함께 올리기
+  const APP_VERSION = '1.0.6'; // 배포 때 version.json·index.html·sw.js와 함께 올리기
   const IS_IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const CATS = ['커피', '식비', '장보기', '교통', '전자제품', '생활용품', '쇼핑', '통신/구독', '주거', '의료', '여가', '교육', '선물/경조사', '수입', '기타'];
 
@@ -1161,7 +1161,7 @@
   $('sCurrency').addEventListener('change', (e) => switchCurrency(e.target.value));
   // ---------- 앱 소개 · 지인에게 보내기 ----------
   const INTRO_URL = IS_PREVIEW ? 'https://t19980519.github.io/voice-budget/intro.html' : new URL('intro.html', location.href).href;
-  $('btnIntro').href = INTRO_URL;
+  $('btnIntro').href = IS_PREVIEW ? INTRO_URL : INTRO_URL + '?from=app'; // 소개 화면에 '앱으로 돌아가기' 보이게
   if (IS_PREVIEW) $('btnIntro').target = '_blank';
   $('btnShareIntro').onclick = async () => {
     const text = '말로 쓰는 가계부 앱이에요. "코스트코 장보기 152불", "이마트 사만오천 원"처럼 말하면 알아서 적어줘요. 무료 · 가입 없음 · 기록은 내 폰에만.';
@@ -1270,6 +1270,13 @@
   })();
   if (!IS_PREVIEW && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
   setupStatic(); render(); checkSummaries();
+  // 소개 화면에서 '앱으로 돌아가기'로 오면 ?page=settings → 그 탭 열고 주소는 깨끗하게
+  (function openPageFromUrl() {
+    let p = null; try { p = new URLSearchParams(location.search).get('page'); } catch (e) { }
+    if (!p || !document.querySelector(`section[data-page="${CSS.escape(p)}"]`)) return;
+    go(p);
+    try { history.replaceState(null, '', location.pathname); } catch (e) { }
+  })();
 
   // 테스트용으로 노출
   window.VB = { payInfo, range, totals, exportMonth, answer, get records() { return records; }, get allRecords() { return allRecords; }, switchCurrency };
