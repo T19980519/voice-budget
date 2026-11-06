@@ -1,4 +1,4 @@
-/* 오늘 얼마 썼어? v1.0.0 · Developed by SEOKWOO KIM — 모든 데이터는 이 폰(localStorage)에만 저장 */
+/* 오늘 얼마 썼어? v1.0.1 · Developed by SEOKWOO KIM — 모든 데이터는 이 폰(localStorage)에만 저장 */
 (function () {
   'use strict';
   const P = window.VBParser;
@@ -486,7 +486,7 @@
   function setupStatic() {
     $('askChips').innerHTML = CHIPS.map((c) => `<button>${esc(c)}</button>`).join('');
     $('fCategory').innerHTML = CATS.map((c) => `<option value="${c}">${esc(c)}</option>`).join('');
-    $('verLine').innerHTML = '<span class="nw">오늘 얼마 썼어? v1.0.0</span> <span class="nw">· Developed by SEOKWOO KIM</span>' + (IS_PREVIEW ? ' <span class="nw">· 미리보기 (기록은 이 화면에만 저장)</span>' : '');
+    $('verLine').innerHTML = '<span class="nw">오늘 얼마 썼어? v1.0.1</span> <span class="nw">· Developed by SEOKWOO KIM</span>' + (IS_PREVIEW ? ' <span class="nw">· 미리보기 (기록은 이 화면에만 저장)</span>' : '');
     $('sCurrency').innerHTML = Object.entries(CURRENCIES).map(([c, l]) => `<option value="${c}">${esc(l)}</option>`).join('');
     applyCurrencyUI();
   }
