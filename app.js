@@ -1,10 +1,11 @@
-/* 오늘 얼마 썼어? v1.0.4 · Developed by SEOKWOO KIM — 모든 데이터는 이 폰(localStorage)에만 저장 */
+/* 오늘 얼마 썼어? v1.0.5 · Developed by SEOKWOO KIM — 모든 데이터는 이 폰(localStorage)에만 저장 */
 (function () {
   'use strict';
   const P = window.VBParser;
   const $ = (id) => document.getElementById(id);
   const KEY_REC = 'vb.records.v1', KEY_SET = 'vb.settings.v1', KEY_NOTI = 'vb.notified.v1';
   const IS_PREVIEW = !!window.VB_PREVIEW; // claude.ai 미리보기 모드
+  const APP_VERSION = '1.0.5'; // 배포 때 version.json·index.html·sw.js와 함께 올리기
   const IS_IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const CATS = ['커피', '식비', '장보기', '교통', '전자제품', '생활용품', '쇼핑', '통신/구독', '주거', '의료', '여가', '교육', '선물/경조사', '수입', '기타'];
 
@@ -524,7 +525,7 @@
   function setupStatic() {
     $('askChips').innerHTML = CHIPS.map((c) => `<button>${esc(c)}</button>`).join('');
     $('fCategory').innerHTML = CATS.map((c) => `<option value="${c}">${esc(c)}</option>`).join('');
-    $('verLine').innerHTML = '<span class="nw">© 2026 오늘 얼마 썼어? v1.0.4</span> <span class="nw">· Developed by SEOKWOO KIM</span>' + (IS_PREVIEW ? ' <span class="nw">· 미리보기 (기록은 이 화면에만 저장)</span>' : '');
+    $('verLine').innerHTML = '<span class="nw">© 2026 오늘 얼마 썼어? v' + APP_VERSION + '</span> <span class="nw">· Developed by SEOKWOO KIM</span>' + (IS_PREVIEW ? ' <span class="nw">· 미리보기 (기록은 이 화면에만 저장)</span>' : '');
     $('sCurrency').innerHTML = Object.entries(CURRENCIES).map(([c, l]) => `<option value="${c}">${esc(l)}</option>`).join('');
     applyCurrencyUI();
   }
@@ -1217,6 +1218,56 @@
   function tick() { const n = new Date(); $('clock').textContent = `${fmtDate(n)} ${fmtTime(n)}`; }
   tick(); setInterval(() => { tick(); if (page === 'home' && !entry) renderPayday(); }, 30000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { tick(); render(); checkSummaries(); } });
+  // ---------- 앱 업데이트 (v1.0.5): 서버의 version.json과 비교 → 새 버전이면 파일을 새로 받고 다시 열기 ----------
+  const UPD_KEY = 'vb.updating';
+  const VERSION_URL = IS_PREVIEW ? 'https://t19980519.github.io/voice-budget/version.json' : 'version.json';
+  const verNum = (v) => String(v || '').split('.').map(Number);
+  const newer = (a, b) => { const x = verNum(a), y = verNum(b); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); } return false; };
+  function setUpdBusy(on, label) {
+    $('btnUpdate').disabled = on; $('btnUpdate').classList.toggle('busy', on);
+    $('btnUpdateL').textContent = label || '업데이트';
+  }
+  async function latestVersion() {
+    const r = await fetch(VERSION_URL + '?t=' + Date.now(), { cache: 'no-store' });
+    if (!r.ok) throw new Error('version ' + r.status);
+    return String((await r.json()).version || '');
+  }
+  /** 새 서비스 워커가 설치·활성화될 때까지 기다림 (최대 15초) */
+  function waitForWorker(reg) {
+    return new Promise((resolve) => {
+      const done = () => resolve(true);
+      const t = setTimeout(() => resolve(false), 15000);
+      const watch = (w) => { if (!w) return false; if (w.state === 'activated') { clearTimeout(t); done(); return true; }
+        w.addEventListener('statechange', () => { if (w.state === 'activated') { clearTimeout(t); done(); } if (w.state === 'redundant') { clearTimeout(t); resolve(false); } }); return true; };
+      if (watch(reg.installing) || watch(reg.waiting)) return;
+      reg.addEventListener('updatefound', () => watch(reg.installing), { once: true });
+    });
+  }
+  async function runUpdate() {
+    if (!navigator.onLine) { toast('인터넷에 연결된 뒤 다시 눌러 주세요.', 3000); return; }
+    setUpdBusy(true, '확인하는 중…');
+    let latest;
+    try { latest = await latestVersion(); }
+    catch (e) { setUpdBusy(false); toast('새 버전을 확인하지 못했어요. 잠시 뒤 다시 눌러 주세요.', 3200); return; }
+    if (!newer(latest, APP_VERSION)) { setUpdBusy(false); toast(`이미 최신 버전입니다. (v${APP_VERSION})`, 3000); return; }
+    if (IS_PREVIEW) { setUpdBusy(false); toast(`새 버전 v${latest}이 있어요. 미리보기는 Claude에서 새로 게시돼야 바뀌어요.`, 4000); return; }
+    setUpdBusy(true, `v${latest} 받는 중…`);
+    try { localStorage.setItem(UPD_KEY, JSON.stringify({ to: latest, from: APP_VERSION })); } catch (e) { }
+    try {
+      const reg = await navigator.serviceWorker?.getRegistration();
+      if (reg) { const wait = waitForWorker(reg); await reg.update(); await wait; }
+    } catch (e) { }
+    location.reload();
+  }
+  $('btnUpdate').onclick = runUpdate;
+  $('updCur').textContent = `지금 버전 v${APP_VERSION}`;
+  // 업데이트 뒤 다시 열렸을 때 결과 알려주기
+  (function updateResult() {
+    let u = null; try { u = JSON.parse(localStorage.getItem(UPD_KEY) || 'null'); localStorage.removeItem(UPD_KEY); } catch (e) { }
+    if (!u) return;
+    if (!newer(u.to, APP_VERSION)) setTimeout(() => toast(`최신 버전으로 업데이트 됐습니다. (v${APP_VERSION})`, 3600), 400);
+    else setTimeout(() => toast('업데이트를 끝내지 못했어요. 잠시 뒤 다시 눌러 주세요.', 3600), 400);
+  })();
   if (!IS_PREVIEW && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { });
   setupStatic(); render(); checkSummaries();
 
