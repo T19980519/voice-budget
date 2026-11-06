@@ -1,4 +1,4 @@
-/* 오늘 얼마 썼어? v0.9.9 · Developed by SEOKWOO KIM — 모든 데이터는 이 폰(localStorage)에만 저장 */
+/* 오늘 얼마 썼어? v1.0.0 · Developed by SEOKWOO KIM — 모든 데이터는 이 폰(localStorage)에만 저장 */
 (function () {
   'use strict';
   const P = window.VBParser;
@@ -486,7 +486,7 @@
   function setupStatic() {
     $('askChips').innerHTML = CHIPS.map((c) => `<button>${esc(c)}</button>`).join('');
     $('fCategory').innerHTML = CATS.map((c) => `<option value="${c}">${esc(c)}</option>`).join('');
-    $('verLine').innerHTML = '<span class="nw">오늘 얼마 썼어? v0.9.9</span> <span class="nw">· Developed by SEOKWOO KIM</span>' + (IS_PREVIEW ? ' <span class="nw">· 미리보기 (기록은 이 화면에만 저장)</span>' : '');
+    $('verLine').innerHTML = '<span class="nw">오늘 얼마 썼어? v1.0.0</span> <span class="nw">· Developed by SEOKWOO KIM</span>' + (IS_PREVIEW ? ' <span class="nw">· 미리보기 (기록은 이 화면에만 저장)</span>' : '');
     $('sCurrency').innerHTML = Object.entries(CURRENCIES).map(([c, l]) => `<option value="${c}">${esc(l)}</option>`).join('');
     applyCurrencyUI();
   }
@@ -607,8 +607,25 @@
     $('fxCategory').value = f ? f.category : '주거'; $('fxCatAuto').value = f ? '' : '1';
     $('fxDelete').hidden = !f; $('fxAmountL').textContent = isWon() ? '금액 (원)' : '금액 ($)';
     $('fxAmount').inputMode = isWon() ? 'numeric' : 'decimal';
+    updateFxNext();
     $('fxForm').scrollIntoView({ block: 'center' }); $('fxName').focus();
   }
+  /** 폼에서 고른 날짜가 실제로 언제 빠져나가는지 미리 보여주기 (다음 3번 중 휴일로 밀리는 달 예시) */
+  function updateFxNext() {
+    const f = { day: Number($('fxDay').value) }, now = new Date();
+    const fmt = (d) => `<b class="${H.dayClass(d)}" style="display:inline">${d.getMonth() + 1}월 ${d.getDate()}일 (${DOWx(d.getDay())})</b>`;
+    let y = now.getFullYear(), m = now.getMonth();
+    if (fixedDay(f, y, m) <= now) m++;
+    const next = fixedDay(f, y, m), plan = fixedPlan(f, y, m);
+    let html = `다음: ${fmt(next)}`;
+    if (dkey(next) !== dkey(plan)) { const h = H.get(plan); html += ` — ${plan.getDate()}일이 ${h ? esc(h.name) : DOWx(plan.getDay()) + '요일'}이라 미뤄져요`; }
+    else for (let k = 1; k <= 12; k++) {   // 앞으로 1년 안에 밀리는 달 하나 예시로
+      const p2 = fixedPlan(f, y, m + k), a2 = fixedDay(f, y, m + k);
+      if (dkey(p2) !== dkey(a2)) { const h = H.get(p2); html += ` · 예) ${p2.getMonth() + 1}월은 ${p2.getDate()}일이 ${h ? esc(h.name) : DOWx(p2.getDay()) + '요일'}이라 ${fmt(a2)}`; break; }
+    }
+    $('fxNext').innerHTML = html;
+  }
+  $('fxDay').addEventListener('change', updateFxNext);
   function closeFixedForm() { fxEditing = null; $('fxForm').hidden = true; $('btnFixedAdd').hidden = false; }
   $('btnFixedAdd').onclick = () => openFixedForm(null);
   $('fxCancel').onclick = closeFixedForm;
