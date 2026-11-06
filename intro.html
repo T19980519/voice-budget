@@ -124,7 +124,7 @@ h2{font-size:20px;letter-spacing:-.4px;margin:26px 2px 10px;line-height:1.35}
   </header>
 
   <section class="hero">
-    <h1>가계부, 이제 <em>말 한마디</em>로 끝내세요</h1>
+    <h1>가계부, 이제 <em>말 한마디</em>로 끝내세요.</h1>
     <p>버튼 누르고 말하면, 알아서 적어 줘요.</p>
     <div class="say" data-cur-block>
       <div class="bubble"><svg><use href="#mic"/></svg><span data-cad>“코스트코에서 장보기 152불 37센트”</span><span data-krw hidden>“이마트에서 장보기 사만오천육백칠십 원”</span></div>
@@ -152,16 +152,16 @@ h2{font-size:20px;letter-spacing:-.4px;margin:26px 2px 10px;line-height:1.35}
   </div>
   <div class="card" data-os-panel="ios">
     <ol class="inst">
-      <li><div><b>Safari</b>로 이 페이지 열기<small>카톡에서 열었다면 <span class="kbd">⋯</span> → "Safari로 열기"</small></div></li>
-      <li><div><span class="kbd"><svg><use href="#share"/></svg> 공유</span> → <span class="kbd">홈 화면에 추가</span></div></li>
-      <li><div>홈 화면 아이콘으로 열고 마이크 <b>허용</b></div></li>
+      <li><div><b>Safari</b>로 이 페이지 열기.<small>카톡에서 열었다면 <span class="kbd">⋯</span> → "Safari로 열기".</small></div></li>
+      <li><div><span class="kbd"><svg><use href="#share"/></svg> 공유</span> → <span class="kbd">홈 화면에 추가</span>.</div></li>
+      <li><div>홈 화면 아이콘으로 열고 마이크 <b>허용</b>.</div></li>
     </ol>
   </div>
   <div class="card" data-os-panel="android" hidden>
     <ol class="inst">
-      <li><div><b>Chrome</b>으로 이 페이지 열기<small>카톡에서 열었다면 <span class="kbd"><svg><use href="#dots"/></svg></span> → "다른 브라우저로 열기"</small></div></li>
-      <li><div><span class="kbd"><svg><use href="#dots"/></svg></span> → <span class="kbd">홈 화면에 추가</span> 또는 <span class="kbd">앱 설치</span></div></li>
-      <li><div>홈 화면 아이콘으로 열고 마이크 <b>허용</b></div></li>
+      <li><div><b>Chrome</b>으로 이 페이지 열기.<small>카톡에서 열었다면 <span class="kbd"><svg><use href="#dots"/></svg></span> → "다른 브라우저로 열기".</small></div></li>
+      <li><div><span class="kbd"><svg><use href="#dots"/></svg></span> → <span class="kbd">홈 화면에 추가</span> 또는 <span class="kbd">앱 설치</span>.</div></li>
+      <li><div>홈 화면 아이콘으로 열고 마이크 <b>허용</b>.</div></li>
     </ol>
   </div>
   <p class="foot">처음에 <b>설정 → 통화</b>에서 원·달러를 고르세요. 기록은 그 폰에만 있으니 폰을 바꾸기 전엔 <b>설정 → 백업</b>을 해 두세요.</p>
@@ -215,8 +215,8 @@ h2{font-size:20px;letter-spacing:-.4px;margin:26px 2px 10px;line-height:1.35}
       try { await navigator.share({ title: '오늘 얼마 썼어? — 말로 쓰는 가계부', text, url }); return; }
       catch (e) { if (e && e.name === 'AbortError') return; }
     }
-    try { await navigator.clipboard.writeText(text + '\n' + url); toast('소개 글과 링크를 복사했어요. 카톡에 붙여넣기 하세요'); }
-    catch (e) { prompt('이 링크를 복사해서 보내세요', url); }
+    try { await navigator.clipboard.writeText(text + '\n' + url); toast('소개 글과 링크를 복사했어요. 카톡에 붙여넣기 하세요.'); }
+    catch (e) { prompt('이 링크를 복사해서 보내세요.', url); }
   }));
 })();
 </script>

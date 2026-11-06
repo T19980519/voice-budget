@@ -1,4 +1,4 @@
-/* 오늘 얼마 썼어? v1.0.3 · Developed by SEOKWOO KIM — 모든 데이터는 이 폰(localStorage)에만 저장 */
+/* 오늘 얼마 썼어? v1.0.4 · Developed by SEOKWOO KIM — 모든 데이터는 이 폰(localStorage)에만 저장 */
 (function () {
   'use strict';
   const P = window.VBParser;
@@ -524,7 +524,7 @@
   function setupStatic() {
     $('askChips').innerHTML = CHIPS.map((c) => `<button>${esc(c)}</button>`).join('');
     $('fCategory').innerHTML = CATS.map((c) => `<option value="${c}">${esc(c)}</option>`).join('');
-    $('verLine').innerHTML = '<span class="nw">© 2026 오늘 얼마 썼어? v1.0.3</span> <span class="nw">· Developed by SEOKWOO KIM</span>' + (IS_PREVIEW ? ' <span class="nw">· 미리보기 (기록은 이 화면에만 저장)</span>' : '');
+    $('verLine').innerHTML = '<span class="nw">© 2026 오늘 얼마 썼어? v1.0.4</span> <span class="nw">· Developed by SEOKWOO KIM</span>' + (IS_PREVIEW ? ' <span class="nw">· 미리보기 (기록은 이 화면에만 저장)</span>' : '');
     $('sCurrency').innerHTML = Object.entries(CURRENCIES).map(([c, l]) => `<option value="${c}">${esc(l)}</option>`).join('');
     applyCurrencyUI();
   }
@@ -1168,7 +1168,7 @@
       try { await navigator.share({ title: '오늘 얼마 썼어? — 말로 쓰는 가계부', text, url: INTRO_URL }); return; }
       catch (e) { if (e && e.name === 'AbortError') return; }
     }
-    try { await navigator.clipboard.writeText(text + '\n' + INTRO_URL); toast('소개 글과 링크를 복사했어요. 카톡에 붙여넣기 하세요', 3000); }
+    try { await navigator.clipboard.writeText(text + '\n' + INTRO_URL); toast('소개 글과 링크를 복사했어요. 카톡에 붙여넣기 하세요.', 3000); }
     catch (e) { toast(INTRO_URL, 6000); }
   };
   [['sFirstPay', 'firstPay'], ['sPayTime', 'payTime'], ['sNotifyTime', 'notifyTime'], ['sWeekStart', 'weekStart'], ['sPayName', 'payName'], ['sPayCycle', 'payCycle'], ['sPayDay', 'payDay']].forEach(([id, k]) =>
