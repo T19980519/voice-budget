@@ -1,4 +1,4 @@
-/* 오늘 얼마 썼어? v0.9.7 · Developed by SEOKWOO KIM — 모든 데이터는 이 폰(localStorage)에만 저장 */
+/* 오늘 얼마 썼어? v0.9.8 · Developed by SEOKWOO KIM — 모든 데이터는 이 폰(localStorage)에만 저장 */
 (function () {
   'use strict';
   const P = window.VBParser;
@@ -236,7 +236,7 @@
   const emptyHTML = (msg, id = 'i-wallet') => `<div class="empty">${icon(id)}<div>${msg}</div></div>`;
   function rowHTML(r, showDate) {
     const d = new Date(r.ts);
-    const meta = (showDate ? fmtDate(d) + ' ' : '') + fmtTime(d) + ' · ' + esc(T(r.category));
+    const meta = (showDate ? fmtDate(d) + ' ' : '') + fmtTime(d) + ' · ' + esc(T(r.category)) + (r.fixedId ? ' · 자동이체' : '');
     return `<div class="row" data-id="${r.id}"><span class="cat ${r.type}">${icon(r.type === 'in' ? 'i-coins' : (CAT_ICON[r.category] || 'i-dollar'))}</span>
       <div class="main"><div class="desc">${P.describeHTML(r)}</div><div class="meta">${meta}</div></div>
       <div class="amt num ${r.type}">${r.type === 'in' ? '+' : '-'}${money(r.amount)}</div></div>`;
@@ -291,6 +291,7 @@
     const rec = records.slice(-6).reverse();
     $('recent').innerHTML = rec.length ? rec.map((r) => rowHTML(r, true)).join('') : emptyHTML(T('아직 기록이 없어요.<br>지출 버튼을 누르고 말해보세요.'));
     renderPayday();
+    renderFixedHome();
     renderHomeBudget();
   }
 
@@ -442,7 +443,7 @@
   function setupStatic() {
     $('askChips').innerHTML = CHIPS.map((c) => `<button>${esc(c)}</button>`).join('');
     $('fCategory').innerHTML = CATS.map((c) => `<option value="${c}">${esc(c)}</option>`).join('');
-    $('verLine').innerHTML = '<span class="nw">오늘 얼마 썼어? v0.9.7</span> <span class="nw">· Developed by SEOKWOO KIM</span>' + (IS_PREVIEW ? ' <span class="nw">· 미리보기 (기록은 이 화면에만 저장)</span>' : '');
+    $('verLine').innerHTML = '<span class="nw">오늘 얼마 썼어? v0.9.8</span> <span class="nw">· Developed by SEOKWOO KIM</span>' + (IS_PREVIEW ? ' <span class="nw">· 미리보기 (기록은 이 화면에만 저장)</span>' : '');
     $('sCurrency').innerHTML = Object.entries(CURRENCIES).map(([c, l]) => `<option value="${c}">${esc(l)}</option>`).join('');
     applyCurrencyUI();
   }
@@ -470,10 +471,132 @@
     toast(`${CURRENCIES[c]}로 바꿨어요` + (other ? ` · 다른 통화 기록 ${other}건은 그대로 보관돼요` : ''), 3600);
   }
 
+  // ---------- 고정지출 (매달 자동이체) ----------
+  // settings.fixed = [{ id, name, amount, day(1~31, 0=말일), mode:'auto'|'confirm', category, cur, start:'YYYY-MM', done:['YYYY-MM',…] }]
+  if (!Array.isArray(settings.fixed)) settings.fixed = [];
+  const mkey = (y, m) => { const d = new Date(y, m, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
+  const fixedDay = (f, y, m) => { const last = new Date(y, m + 1, 0).getDate(); return new Date(y, m, f.day > 0 ? Math.min(f.day, last) : last, 9, 0, 0); };
+  const myFixed = () => settings.fixed.filter((f) => f.cur === settings.currency);
+  const dayText = (f) => (f.day > 0 ? `매달 ${f.day}일` : '매달 말일');
+  /** 날짜가 된(지난) 달 중 아직 처리 안 한 것 [{f, month, due}] — 오래 안 열었어도 항목마다 최대 12달 */
+  function fixedDue(now = new Date()) {
+    const out = [];
+    for (const f of myFixed()) {
+      const [sy, sm] = f.start.split('-').map(Number);
+      let y = sy, m = sm - 1, guard = 0;
+      const mine = [];
+      while (guard++ < 120) {
+        const due = fixedDay(f, y, m);
+        if (due > now) break;
+        const k = mkey(y, m);
+        if (!(f.done || []).includes(k)) mine.push({ f, month: k, due });
+        m++; if (m > 11) { m = 0; y++; }
+      }
+      out.push(...mine.slice(-12));
+    }
+    return out.sort((a, b) => a.due - b.due);
+  }
+  function markFixedDone(id, month) {
+    const f = settings.fixed.find((x) => x.id === id); if (!f) return;
+    f.done = (f.done || []).filter((k) => k !== month).concat(month).sort().slice(-24);
+    save(KEY_SET, settings);
+  }
+  /** 자동 기록 항목은 그날이 되면 바로 기록 (앱을 열 때·화면이 바뀔 때) */
+  function runFixed() {
+    const due = fixedDue().filter((d) => d.f.mode === 'auto');
+    if (!due.length) return;
+    const budBefore = budgetStatus();
+    for (const { f, month, due: when } of due) {
+      records.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), type: 'out', amount: f.amount, merchant: '', item: f.name,
+        category: f.category, with: [], meal: '', ts: +when, memo: f.name + ' 자동이체', fixedId: f.id, fixedMonth: month });
+      markFixedDone(f.id, month);
+    }
+    saveRecords();
+    const names = due.map((d) => d.f.name);
+    toast(`자동이체 ${due.length}건 기록: ${names.slice(0, 2).join(', ')}${names.length > 2 ? ' 외' : ''} · ${money(due.reduce((a, d) => a + d.f.amount, 0))}`, 3800);
+    warnBudgets(budgetCrossings(budBefore));
+  }
+  /** 홈: 금액 확인이 필요한 고정지출 배너 + 고정지출 요약 한 줄 */
+  function renderFixedHome() {
+    const box = $('fixedHome'); if (!box) return;
+    const list = myFixed();
+    if (!list.length) { box.innerHTML = ''; return; }
+    const pend = fixedDue().filter((d) => d.f.mode === 'confirm');
+    let html = pend.map((d) => `<div class="banner"><span class="ic">${icon('i-cal')}</span><div class="t"><b>${esc(d.f.name)} 자동이체일</b>${d.due.getMonth() + 1}.${d.due.getDate()} (${DOWx(d.due.getDay())}) · 금액을 확인하고 기록하세요</div>
+      <div class="bcol"><button data-fx-rec="${d.f.id}|${d.month}">기록</button><button class="skip" data-fx-skip="${d.f.id}|${d.month}">건너뛰기</button></div></div>`).join('');
+    const now = new Date(), y = now.getFullYear(), m = now.getMonth();
+    const total = list.reduce((a, f) => a + f.amount, 0);
+    const upcoming = list.map((f) => ({ f, due: fixedDay(f, y, m) })).concat(list.map((f) => ({ f, due: fixedDay(f, y, m + 1) })))
+      .filter((x) => x.due > now && mkey(x.due.getFullYear(), x.due.getMonth()) >= x.f.start).sort((a, b) => a.due - b.due)[0];
+    html += `<button class="fxline" data-go-fixed><span class="ic">${icon('i-cal')}</span><span class="t">매달 고정지출 <b class="num">${money(total)}</b> · ${list.length}건${upcoming ? `<small>다음: ${upcoming.due.getMonth() + 1}월 ${upcoming.due.getDate()}일 ${esc(upcoming.f.name)} ${upcoming.f.mode === 'confirm' ? '(금액 확인)' : money(upcoming.f.amount)}</small>` : ''}</span>${icon('i-chev-r')}</button>`;
+    box.innerHTML = html;
+  }
+  document.addEventListener('click', (e) => {
+    const r = e.target.closest('[data-fx-rec]'), sk = e.target.closest('[data-fx-skip]'), g = e.target.closest('[data-go-fixed]');
+    if (r) {
+      const [id, month] = r.dataset.fxRec.split('|'); const f = settings.fixed.find((x) => x.id === id); if (!f) return;
+      const [yy, mm] = month.split('-').map(Number);
+      openEntry('out', { item: f.name, amount: f.amount ? fmtAmtInput(f.amount) : '', category: f.category, when: fixedDay(f, yy, mm - 1), fixed: { id, month } });
+      setTimeout(() => { $('fAmount').focus(); $('fAmount').select(); }, 300);
+    }
+    if (sk) { const [id, month] = sk.dataset.fxSkip.split('|'); markFixedDone(id, month); renderHome(); toast(`${Number(month.slice(5))}월 ${(settings.fixed.find((x) => x.id === id) || {}).name || ''}은(는) 건너뛰었어요`); }
+    if (g) { go('settings'); setTimeout(() => $('fixedList').scrollIntoView({ block: 'center' }), 50); }
+  });
+  // 설정: 목록 + 추가/수정 폼
+  function renderFixedSettings() {
+    const list = myFixed();
+    $('fixedList').innerHTML = list.length ? list.map((f) => `<button class="row fxrow" data-fx-edit="${f.id}"><span class="cat">${icon(CAT_ICON[f.category] || 'i-dollar')}</span>
+      <div class="main"><div class="desc"><b>${esc(f.name)}</b></div><div class="meta">${dayText(f)} · ${f.mode === 'auto' ? '자동 기록' : '금액 확인 후 기록'} · ${esc(f.category)}</div></div>
+      <div class="amt num">${f.mode === 'confirm' && !f.amount ? '변동' : money(f.amount)}</div></button>`).join('')
+      : `<div class="empty" style="padding:14px 8px">${icon('i-cal')}모기지·관리비·보험·넷플릭스처럼 매달 빠져나가는 돈을 등록하면 그날 기록돼요.</div>`;
+    $('fixedTotal').textContent = list.length ? `합계 ${money(list.reduce((a, f) => a + f.amount, 0))} / 달` : '';
+  }
+  let fxEditing = null;
+  function openFixedForm(f) {
+    fxEditing = f || null;
+    $('fxForm').hidden = false; $('btnFixedAdd').hidden = true;
+    $('fxName').value = f ? f.name : ''; $('fxAmount').value = f && f.amount ? fmtAmtInput(f.amount) : '';
+    $('fxDay').value = String(f ? f.day : new Date().getDate()); $('fxMode').value = f ? f.mode : 'auto';
+    $('fxCategory').value = f ? f.category : '주거'; $('fxCatAuto').value = f ? '' : '1';
+    $('fxDelete').hidden = !f; $('fxAmountL').textContent = isWon() ? '금액 (원)' : '금액 ($)';
+    $('fxAmount').inputMode = isWon() ? 'numeric' : 'decimal';
+    $('fxForm').scrollIntoView({ block: 'center' }); $('fxName').focus();
+  }
+  function closeFixedForm() { fxEditing = null; $('fxForm').hidden = true; $('btnFixedAdd').hidden = false; }
+  $('btnFixedAdd').onclick = () => openFixedForm(null);
+  $('fxCancel').onclick = closeFixedForm;
+  $('fixedList').addEventListener('click', (e) => { const b = e.target.closest('[data-fx-edit]'); if (b) openFixedForm(settings.fixed.find((x) => x.id === b.dataset.fxEdit)); });
+  // 이름을 적으면 카테고리 자동 추측 (직접 고르면 그대로)
+  $('fxName').addEventListener('input', () => { if ($('fxCatAuto').value) { const c = P.guessCategory($('fxName').value); $('fxCategory').value = c === '기타' || c === '수입' ? '주거' : c; } });
+  $('fxCategory').addEventListener('change', () => { $('fxCatAuto').value = ''; });
+  $('fxSave').onclick = () => {
+    const name = $('fxName').value.trim(), amount = parseAmt($('fxAmount').value), day = Number($('fxDay').value), mode = $('fxMode').value;
+    if (!name) { toast('이름(어디서 빠져나가는지)을 적어주세요'); $('fxName').focus(); return; }
+    if (!(amount > 0) && mode === 'auto') { toast('자동 기록은 금액이 필요해요'); $('fxAmount').focus(); return; }
+    const data = { name, amount: amount > 0 ? amount : 0, day, mode, category: $('fxCategory').value };
+    let f = fxEditing;
+    if (f) Object.assign(f, data);
+    else {
+      // 이번 달 날짜가 이미 지났으면 다음 달부터 (이번 달 것은 직접 넣었을 수 있으니 중복 방지)
+      const now = new Date(), thisDue = fixedDay(data, now.getFullYear(), now.getMonth());
+      const start = thisDue <= now ? mkey(now.getFullYear(), now.getMonth() + 1) : mkey(now.getFullYear(), now.getMonth());
+      f = Object.assign({ id: 'fx' + Date.now().toString(36), cur: settings.currency, start, done: [] }, data);
+      settings.fixed.push(f);
+    }
+    const wasEdit = !!fxEditing;
+    save(KEY_SET, settings); closeFixedForm(); renderFixedSettings();
+    const [sy, sm] = f.start.split('-').map(Number);
+    toast(wasEdit ? '고정지출을 고쳤어요' : `${name} 등록 · ${sm}월 ${fixedDay(f, sy, sm - 1).getDate()}일부터 ${mode === 'auto' ? '자동으로 기록돼요' : '기록하라고 알려드려요'}`, 3400);
+  };
+  $('fxDelete').onclick = async () => {
+    if (!fxEditing || !(await askConfirm(`'${fxEditing.name}' 고정지출을 지울까요? 이미 기록된 지출은 그대로 남아요.`, '지우기'))) return;
+    settings.fixed = settings.fixed.filter((x) => x !== fxEditing); save(KEY_SET, settings); closeFixedForm(); renderFixedSettings(); toast('지웠어요');
+  };
+
   // ---------- 입력 시트 ----------
   let entry = null; // {type, editing, payday}
   function openEntry(type, preset, existing) {
-    entry = { extra: existing ? { to: existing.to, forWho: existing.forWho, dest: existing.dest, verb: existing.verb } : null, type, editing: existing || null, payday: preset?.payday || existing?.payday || null, multi: null,
+    entry = { extra: existing ? { to: existing.to, forWho: existing.forWho, dest: existing.dest, verb: existing.verb } : null, type, editing: existing || null, payday: preset?.payday || existing?.payday || null, fixed: preset?.fixed || null, multi: null,
               lang: 'ko' };
     $('detailFields').hidden = false;
     $('sheetTitle').textContent = T(existing ? '기록 수정' : (type === 'in' ? '입금 입력' : '지출 입력'));
@@ -546,7 +669,7 @@
   $('entryText').addEventListener('input', () => {
     growText();
     const said = $('entryText').value;
-    const segs = entry && !entry.editing && !entry.payday ? P.splitEntries(said) : [said];
+    const segs = entry && !entry.editing && !entry.payday && !entry.fixed ? P.splitEntries(said) : [said];
     if (segs.length > 1) {
       let carry = null;   // "10월 31일 코스트코 150불 그다음 주유 60불" → 둘 다 10월 31일
       entry.multi = segs.map((sg) => {
@@ -627,6 +750,10 @@
     if (entry.editing && f.desc === undefined) delete entry.editing.desc;
     const data = Object.assign(f, { ts, memo });
     if (entry.payday) data.payday = entry.payday;
+    if (entry.fixed) {   // 금액 확인 후 기록한 고정지출: 이번 달 처리 완료, 다음 달엔 이번 금액을 미리 채움
+      data.fixedId = entry.fixed.id; data.fixedMonth = entry.fixed.month; markFixedDone(entry.fixed.id, entry.fixed.month);
+      const fx = settings.fixed.find((x) => x.id === entry.fixed.id); if (fx && fx.mode === 'confirm') { fx.amount = f.amount; save(KEY_SET, settings); }
+    }
     if (entry.editing) Object.assign(entry.editing, data);
     else records.push(Object.assign({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6) }, data));
     saveRecords();
@@ -914,6 +1041,7 @@
     save(KEY_SET, settings); toast(v > 0 ? `${inp.dataset.bcat === BUDGET_ALL ? '전체' : inp.dataset.bcat} 예산 ${money(v)} 저장` : '예산을 지웠어요');
   });
   function renderSettings() {
+    renderFixedSettings();
     renderLearned();
     renderBudgetFields();
     $('sCurrency').value = settings.currency;
@@ -978,6 +1106,7 @@
 
   // ---------- 시작 ----------
   function render() {
+    if (!entry) runFixed();
     if (page === 'home') renderHome();
     if (page === 'history') renderHistory();
     if (page === 'settings') renderSettings();

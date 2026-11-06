@@ -247,6 +247,17 @@ section[data-page]{display:none} section[data-page].on{display:block}
 .trend .tv{font-size:10px;color:var(--muted);white-space:nowrap}
 .tip{font-size:13px;color:var(--muted);min-height:20px;margin-top:6px}
 .tip b{color:var(--ink)}
+.banner .bcol{display:grid;gap:6px;flex:none}
+.banner .bcol .skip{background:var(--field);color:var(--muted);border:1px solid var(--line);font-weight:600;padding:7px 10px;font-size:13px}
+.fxline{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:11px 12px 11px 14px;margin:12px 0}
+.fxline .ic{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;background:var(--field);color:var(--gold-ink);flex:none}
+.fxline .t{flex:1;min-width:0;font-size:14px;color:var(--muted)}
+.fxline .t b{color:var(--ink);font-size:15px}
+.fxline .t small{display:block;font-size:12.5px}
+.fxline>svg.i{width:18px;height:18px;color:var(--muted)}
+.fxrow{width:100%;border-left:0;border-right:0;border-top:0;background:none;text-align:left}
+.fxrow .desc b{color:var(--ink)}
+.fxform{border-top:1px solid var(--line);padding-top:6px;margin-bottom:10px}
 [hidden]{display:none!important}
 </style>
 </head>
@@ -310,6 +321,7 @@ section[data-page]{display:none} section[data-page].on{display:block}
     </div>
 
     <div id="paydayBanner"></div>
+    <div id="fixedHome"></div>
     <div id="homeBudget"></div>
 
     <div class="actions">
@@ -382,6 +394,27 @@ section[data-page]{display:none} section[data-page].on{display:block}
 
   <!-- 설정 -->
   <section data-page="settings">
+    <h2>고정지출 (자동이체)</h2>
+    <div class="card" style="padding-bottom:12px">
+      <div id="fixedList"></div>
+      <div class="note" id="fixedTotal" style="text-align:right;margin:2px 2px 8px"></div>
+      <div id="fxForm" class="fxform" hidden>
+        <label class="field"><span>이름 — 어디서 빠져나가나요?</span><input id="fxName" placeholder="예) 모기지, 콘도 관리비, 넷플릭스, 자동차 보험"></label>
+        <div class="grid2">
+          <label class="field"><span id="fxAmountL">금액 ($)</span><input id="fxAmount" class="num" inputmode="decimal" placeholder="매달 다르면 비워도 돼요"></label>
+          <label class="field"><span>날짜</span><select id="fxDay"><option value="1">매달 1일</option><option value="2">매달 2일</option><option value="3">매달 3일</option><option value="4">매달 4일</option><option value="5">매달 5일</option><option value="6">매달 6일</option><option value="7">매달 7일</option><option value="8">매달 8일</option><option value="9">매달 9일</option><option value="10">매달 10일</option><option value="11">매달 11일</option><option value="12">매달 12일</option><option value="13">매달 13일</option><option value="14">매달 14일</option><option value="15">매달 15일</option><option value="16">매달 16일</option><option value="17">매달 17일</option><option value="18">매달 18일</option><option value="19">매달 19일</option><option value="20">매달 20일</option><option value="21">매달 21일</option><option value="22">매달 22일</option><option value="23">매달 23일</option><option value="24">매달 24일</option><option value="25">매달 25일</option><option value="26">매달 26일</option><option value="27">매달 27일</option><option value="28">매달 28일</option><option value="29">매달 29일</option><option value="30">매달 30일</option><option value="31">매달 31일</option><option value="0">매달 말일</option></select></label>
+        </div>
+        <div class="grid2">
+          <label class="field"><span>기록 방식</span><select id="fxMode"><option value="auto">자동 기록 (금액이 매달 같음)</option><option value="confirm">금액 확인 후 기록 (매달 다름)</option></select></label>
+          <label class="field"><span>카테고리</span><select id="fxCategory"><option value="커피">커피</option><option value="식비">식비</option><option value="장보기">장보기</option><option value="교통">교통</option><option value="전자제품">전자제품</option><option value="생활용품">생활용품</option><option value="쇼핑">쇼핑</option><option value="통신/구독">통신/구독</option><option value="주거">주거</option><option value="의료">의료</option><option value="여가">여가</option><option value="교육">교육</option><option value="선물/경조사">선물/경조사</option><option value="기타">기타</option></select></label>
+        </div>
+        <input type="hidden" id="fxCatAuto" value="1">
+        <div class="grid2" style="margin-top:6px"><button class="btn ghost" id="fxCancel">취소</button><button class="btn" id="fxSave">저장</button></div>
+        <button class="btn danger" id="fxDelete" hidden style="margin-top:8px">이 고정지출 지우기</button>
+      </div>
+      <button class="btn ghost" id="btnFixedAdd">+ 고정지출 추가</button>
+    </div>
+
     <h2>통화</h2>
     <div class="card pad">
       <label class="field"><span>돈 단위</span><select id="sCurrency"></select></label>
@@ -442,7 +475,7 @@ section[data-page]{display:none} section[data-page].on{display:block}
     </div>
   </section>
 
-  <p class="ver" id="verLine"><span class="nw">오늘 얼마 썼어? v0.9.7</span> <span class="nw">· Developed by SEOKWOO KIM</span></p>
+  <p class="ver" id="verLine"><span class="nw">오늘 얼마 썼어? v0.9.8</span> <span class="nw">· Developed by SEOKWOO KIM</span></p>
 </div>
 
 <nav class="tabs" id="tabs">
