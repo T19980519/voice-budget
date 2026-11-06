@@ -788,11 +788,47 @@
     '지출', '수입', '입금', '돈', '금액', '기록', '내역', '사용', '사용한', '오늘', '어제', '그저께', '올해', '작년', '금년', '이달', '금주', '금월', '최근', '동안',
     '남은', '잔액', '인지', '건', '거', '것', '좀', '정도', '했던', '했었던', '그', '그때', '가장', '마지막', '마지막으로', '처음', '최근에',
     '번', '회', '몇번', '군데', '횟수', '제일', '젤', '큰', '비싼', '작은', '싼', '적게', '적은', '최대', '최소', '중', '중에', '중에서', '것은', '건', '거는', '뭐야', '뭐였어', '뭐지', '무엇', '어떤', '어느', '많이', '많은', '어디에', '어디다', '어디에다', '뭐에', '뭐에다', '순위', '쓴', '쓴거', '쓴게', '데', '곳', '건지', '주말', '일주일', '1주일', '한달', '달', '개월', '알려줘', '보여줘', '찾아줘', '줘', '봐', '좀', '혹시', '있어', '있나', '있었어', '얼마나', '돈을', '돈']);
-  const QUERY_STOP = { test: (w) => QUERY_STOP_WORDS.has(w) || /^(얼마|이번|요번|지난|저번|알려|보여|찾아|계산|남았)/.test(w) || isFiller(w) };
+  const QUERY_STOP = { test: (w) => QUERY_STOP_WORDS.has(w) || LONE_PARTICLE.test(w) || /^(번|회)(이야|이지|이었어|이었지|이에요|인가|인지|이나|째)?$/.test(w) || /^(간|갔던|가본|다닌|다녀온|간데|간곳|들른)$/.test(w) || /^(얼마|이번|요번|지난|저번|알려|보여|찾아|계산|남았)/.test(w) || isFiller(w) };
+
+  // ---------- 묶음 말 (v1.0.2): "배달 음식", "기름값", "술값", "편의점" … 여러 가게·물건을 한 번에 찾기 ----------
+  // say: 질문·검색에서 이 묶음을 뜻하는 말 / words: 기록에 이 중 하나라도 있으면 해당 / not: 있으면 빼기 / verb: 이렇게 기록된 문장도 포함
+  const GROUPS = [
+    { id: '배달', label: '배달 음식', say: /배달\s*(?:음식|시킨\s*(?:거|것|음식)?|시켜\s*먹은\s*(?:거|것)?|비|앱)?|시켜\s*먹은\s*(?:거|것|음식)?|딜리버리|delivery|take\s*-?out|테이크\s*아웃|포장\s*(?:음식|해\s*온\s*(?:거|것))?/gi,
+      words: ['배달의민족', '요기요', '쿠팡이츠', '우버이츠', '스킵더디쉬', '도어대시', '배달', '딜리버리', '시켜먹', '테이크아웃', '포장'], verb: 'order' },
+    { id: '주유', label: '주유·기름값', say: /주유\s*(?:비|소)?|기름\s*값?|개스\s*(?:비|값)?|gas/gi,
+      words: ['주유', '기름', '개스', '에쏘', '페트로캐나다', '쉘', '울트라마', '파이오니어', '하스키', 'sk에너지', 'gs칼텍스', '에쓰오일', '현대오일뱅크'] },
+    { id: '술', label: '술', say: /(?:^|\s)(?:술\s*(?:값|자리|집|마신\s*(?:거|것)?)?|주류)(?=\s|$|[을를은는이가에도])/g,
+      words: ['술', '소주', '맥주', '와인', '막걸리', '위스키', '보드카', '사케', '하이볼', '칵테일', '엘씨비오', '비어스토어', '치맥', '호프', '이자카야', '포차'] },
+    { id: '편의점', label: '편의점', say: /편의점/g,
+      words: ['편의점', '씨유', '지에스25', '세븐일레븐', '이마트24', '미니스톱', '써클케이', '서클케이', '마크스', 'macs'] },
+    { id: '패스트푸드', label: '패스트푸드', say: /패스트\s*푸드|fast\s*food|햄버거\s*(?:집|가게)/gi,
+      words: ['맥도날드', '버거킹', '웬디스', '케이에프씨', '파파이스', '서브웨이', '하비스', '롯데리아', '맘스터치', '치폴레', '에이앤더블유', 'a&w', '파이브가이즈', '햄버거', '버거'] },
+    { id: '공과금', label: '공과금', say: /공과금|유틸리티\s*(?:비|요금)?|각종\s*요금|전기\s*(?:세|요금|비)|수도\s*(?:세|요금|비)|가스\s*(?:세|요금|비)/g,
+      words: ['공과금', '유틸리티', '하이드로', '엔브리지', '전기세', '전기요금', '수도세', '수도요금', '가스비', '가스요금', '도시가스', '관리비'] },
+    { id: '대중교통', label: '대중교통', say: /대중\s*교통|버스\s*(?:비|요금)?|지하철|전철|티티씨|TTC/gi,
+      words: ['ttc', '프레스토', '버스', '지하철', '전철', '교통카드', '티머니', '기차', 'ktx', '고트레인', 'go트레인', '업익스프레스'] },
+    { id: '택시', label: '택시·우버', say: /택시\s*(?:비|요금)?|우버(?!\s*이츠)|리프트/g,
+      words: ['택시', '우버', '리프트', '카카오택시', '카카오t'], not: ['우버이츠'] },
+  ];
+  /** 질문·검색 말에서 묶음 말을 찾아 빼냄 → { groups: ['배달', …], rest: 남은 말 } */
+  function takeGroups(text) {
+    let rest = String(text || ''); const groups = [];
+    for (const g of GROUPS) {
+      g.say.lastIndex = 0;
+      if (g.say.test(rest)) { groups.push(g.id); g.say.lastIndex = 0; rest = rest.replace(g.say, ' '); }
+    }
+    return { groups, rest };
+  }
+  const groupLabel = (id) => (GROUPS.find((g) => g.id === id) || { label: id }).label;
+  function groupMatches(rec, id, hay) {
+    const g = GROUPS.find((x) => x.id === id); if (!g) return false;
+    if (g.not && g.not.some((w) => hay.includes(w)) && !g.words.some((w) => w !== '우버' && hay.includes(w))) return false;
+    return (g.verb && rec.verb === g.verb) || g.words.some((w) => hay.includes(w.toLowerCase()));
+  }
 
   function parseQueryKo(text) {
     const raw = String(text || '').trim();
-    const q = { raw, lang: 'ko', intent: 'list', period: null, type: null, keywords: [] };
+    const q = { raw, lang: 'ko', intent: 'list', period: null, type: null, keywords: [], groups: [] };
     let dq = null;
 
     // 기간
@@ -833,6 +869,7 @@
     // 키워드
     let t = raw.replace(/[?!.,~]/g, ' ');
     if (dq) for (const r of dq.remove) t = t.replace(r, ' ');
+    const tg = takeGroups(t); q.groups = tg.groups; t = tg.rest;
     for (const g of SYNONYMS) for (const w of g) if (w.includes(' ')) t = t.split(w).join(g[0]);
     q.keywords = t.split(/\s+/).map(cleanWord)
       .filter(w => w && !QUERY_STOP.test(w) && !/^\d+(월|일|월달)?$/.test(w) && !/^(일|주|월|달|년)$/.test(w))
@@ -847,14 +884,34 @@
 
   /** 기록이 키워드를 모두 포함하는지 */
   /** 몇 개의 키워드가 맞는지 (질문 단어와 기록의 동의어까지 비교) */
-  function matchCount(rec, keywords) {
-    const hay = searchText([rec.merchant, rec.item, rec.category, rec.memo, (rec.with || []).join(' '), rec.meal, rec.desc].join(' '));
-    return keywords.filter((k) => hay.includes(k)).length;
+  const recHay = (rec) => searchText([rec.merchant, rec.item, rec.category, rec.memo, rec.desc, rec.meal, rec.dest, rec.to, (rec.with || []).join(' ')].join(' '));
+  function matchCount(rec, keywords, groups = []) {
+    const hay = recHay(rec);
+    return keywords.filter((k) => hay.includes(k)).length + groups.filter((g) => groupMatches(rec, g, hay)).length;
   }
-  function recordMatches(rec, keywords) {
-    if (!keywords.length) return true;
-    const hay = searchText([rec.merchant, rec.item, rec.category, rec.memo, rec.desc, rec.meal, rec.dest, rec.to, (rec.with || []).join(' ')].join(' '));
-    return keywords.every(k => hay.includes(k));
+  function recordMatches(rec, keywords, groups = []) {
+    if (!keywords.length && !groups.length) return true;
+    const hay = recHay(rec);
+    return keywords.every(k => hay.includes(k)) && groups.every((g) => groupMatches(rec, g, hay));
+  }
+
+  // ---------- 기록 탭 검색 (v1.0.2): 단어·묶음 말·금액 ----------
+  /** "코스트코 45.99", "배달 음식", "12불" → { groups, keywords, amounts } */
+  function parseSearch(text) {
+    const tg = takeGroups(normalizeSpoken(String(text || '')));
+    const amounts = [], keywords = [];
+    for (let w of tg.rest.split(/\s+/)) {
+      w = w.replace(/[?!,~]/g, ''); if (!w) continue;
+      const m = /^\$?(\d+(?:\.\d{1,2})?)\s*(불|달러|원|\$)?$/.exec(w.replace(/,/g, ''));
+      if (m) { amounts.push({ v: Number(m[1]), exact: m[1].includes('.') }); continue; }
+      const k = normalizeKeyword(stripParticle(w));
+      if (k) keywords.push(k);
+    }
+    return { groups: tg.groups, keywords, amounts };
+  }
+  function searchMatches(rec, s) {
+    if (s.amounts.some((a) => (a.exact ? Math.abs(rec.amount - a.v) > 0.004 : Math.floor(rec.amount + 1e-9) !== a.v))) return false;
+    return recordMatches(rec, s.keywords, s.groups);
   }
 
   // ---------- 말로 한 숫자 정리 ----------
@@ -1102,7 +1159,7 @@
     if (si >= 0 && (!merchant || !STORES.has(normalizeKeyword(merchant)))) { area = merchant; merchant = words[si]; words.splice(si, 1); }
     return { merchant, item: words.join(' '), area };
   }
-  const api = { setCurrency, parseWon, findWon, repairRecord, goodItemWord, setPriceHistory, plausibleAmount, nativeCount, learnPhrase, setPhrases, describeAuto, scoreText, setLearned, fixSounds, dateFrom, splitEntries, matchCount, describe, describeHTML, josa, parseKoNumber, findAmount, parseEntry, parseQuery, normalizeKeyword, searchText, recordMatches, guessCategory };
+  const api = { parseSearch, searchMatches, groupLabel, setCurrency, parseWon, findWon, repairRecord, goodItemWord, setPriceHistory, plausibleAmount, nativeCount, learnPhrase, setPhrases, describeAuto, scoreText, setLearned, fixSounds, dateFrom, splitEntries, matchCount, describe, describeHTML, josa, parseKoNumber, findAmount, parseEntry, parseQuery, normalizeKeyword, searchText, recordMatches, guessCategory };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.VBParser = api;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -1,4 +1,4 @@
-/* 오늘 얼마 썼어? v1.0.1 · Developed by SEOKWOO KIM — 모든 데이터는 이 폰(localStorage)에만 저장 */
+/* 오늘 얼마 썼어? v1.0.2 · Developed by SEOKWOO KIM — 모든 데이터는 이 폰(localStorage)에만 저장 */
 (function () {
   'use strict';
   const P = window.VBParser;
@@ -349,7 +349,52 @@
   $('mPrev').onclick = () => { catFilter = null; dayFilter = null; viewMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() - 1, 1); renderHistory(); };
   $('mNext').onclick = () => { catFilter = null; dayFilter = null; viewMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 1); renderHistory(); };
   function monthRecords(m) { const s = som(m), e = new Date(s.getFullYear(), s.getMonth() + 1, 1); return records.filter((r) => r.ts >= +s && r.ts < +e); }
+  // ---------- 기록 검색·필터 (v1.0.2): 검색어가 있으면 전체 기간에서 찾기, 지출만/입금만 ----------
+  let hQuery = '', hType = '';
+  let hSearchT;
+  $('hSearch').addEventListener('input', (e) => {
+    clearTimeout(hSearchT);
+    hSearchT = setTimeout(() => { hQuery = e.target.value.trim(); $('hClear').hidden = !hQuery; renderHistory(); }, 180);
+  });
+  $('hSearch').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } });
+  $('hClear').onclick = () => { $('hSearch').value = ''; hQuery = ''; $('hClear').hidden = true; renderHistory(); };
+  $('hType').addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    hType = b.dataset.t;
+    $('hType').querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+    renderHistory();
+  });
+  function dayGroupsHTML(rs0) {
+    const groups = new Map();
+    for (const r of rs0.slice().reverse()) { const k = dkey(new Date(r.ts)); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(r); }
+    let html = '';
+    for (const [, rs] of groups) {
+      const out = rs.filter((r) => r.type === 'out').reduce((a, r) => a + r.amount, 0), inn = rs.filter((r) => r.type === 'in').reduce((a, r) => a + r.amount, 0);
+      const hd = new Date(rs[0].ts), hol = H.get(hd);
+      const right = out || !inn ? T('지출 {amt}', { amt: money(out) }) : '입금 ' + money(inn);
+      html += `<div class="dayhead"><span class="${H.dayClass(hd)}">${fmtDate(hd)}${hol ? ' · ' + esc(hol.name) : ''}</span><span class="num">${right}</span></div>` + rs.map((r) => rowHTML(r, false)).join('');
+    }
+    return html;
+  }
+  function renderSearch() {
+    const s = P.parseSearch(hQuery);
+    const found = records.filter((r) => (!hType || r.type === hType) && P.searchMatches(r, s));
+    const label = [...s.groups.map(P.groupLabel), ...s.keywords, ...s.amounts.map((a) => money(a.v))].join(' ') || hQuery;
+    if (!found.length) {
+      $('historyList').innerHTML = emptyHTML(`'${esc(label)}' 기록이 없어요.<br>가게나 물건 이름 한 단어로 찾아보세요.`, 'i-search');
+      return;
+    }
+    const out = found.filter((r) => r.type === 'out').reduce((a, r) => a + r.amount, 0), inn = found.filter((r) => r.type === 'in').reduce((a, r) => a + r.amount, 0);
+    const tss = found.map((r) => r.ts), first = new Date(Math.min(...tss)), last = new Date(Math.max(...tss));
+    const sums = [out ? '지출 ' + money(out) : '', inn ? '입금 ' + money(inn) : ''].filter(Boolean).join(' · ');
+    $('historyList').innerHTML = `<div class="searchsum"><b>'${esc(label)}' ${found.length}건</b><span class="num">${sums}</span></div>
+      <div class="note" style="padding:4px 0 0">전체 기간 · ${fmtDate(first)}${found.length > 1 ? ' ~ ' + fmtDate(last) : ''}</div>` + dayGroupsHTML(found);
+  }
   function renderHistory() {
+    const searching = !!hQuery;
+    for (const id of ['monthCard', 'calCard', 'chartCard']) $(id).hidden = searching;
+    document.querySelector('[data-page="history"] .monthbar').hidden = searching;
+    if (searching) { renderSearch(); return; }
     $('mLabel').textContent = T('{y}년 {m}월', { y: viewMonth.getFullYear(), m: viewMonth.getMonth() + 1, });
     const list = monthRecords(viewMonth);
     const t = totals(som(viewMonth), new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 1));
@@ -358,19 +403,12 @@
     renderCharts(list);
     renderCalendar(list);
     if (!list.length) { $('historyList').innerHTML = emptyHTML(T('이 달에는 기록이 없어요.'), 'i-ledger'); return; }
-    const shown = list.filter((r) => (!catFilter || (r.category || '기타') === catFilter) && (!dayFilter || dkey(new Date(r.ts)) === dayFilter));
+    const shown = list.filter((r) => (!hType || r.type === hType) && (!catFilter || (r.category || '기타') === catFilter) && (!dayFilter || dkey(new Date(r.ts)) === dayFilter));
     document.querySelectorAll('#catChart .cbar').forEach((b) => b.classList.toggle('sel', b.dataset.cat === catFilter));
     $('catTip').innerHTML = catFilter ? `<b>${esc(catFilter)}</b> 기록만 보여주는 중 · 막대를 다시 누르면 전체` : '막대를 누르면 그 카테고리 기록만 볼 수 있어요';
-    if (!shown.length) { $('historyList').innerHTML = emptyHTML(dayFilter ? '이 날은 기록이 없어요.' : `이 달 ${esc(catFilter)} 기록이 없어요.`, 'i-ledger'); return; }
-    const groups = new Map();
-    for (const r of shown.slice().reverse()) { const k = dkey(new Date(r.ts)); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(r); }
-    let html = '';
-    for (const [k, rs] of groups) {
-      const out = rs.filter((r) => r.type === 'out').reduce((s, r) => s + r.amount, 0);
-      const hd = new Date(rs[0].ts), hol = H.get(hd);
-      html += `<div class="dayhead"><span class="${H.dayClass(hd)}">${fmtDate(hd)}${hol ? ' · ' + esc(hol.name) : ''}</span><span class="num">${T('지출 {amt}', { amt: money(out) })}</span></div>` + rs.map((r) => rowHTML(r, false)).join('');
-    }
-    $('historyList').innerHTML = html;
+    const what = hType === 'in' ? '입금 ' : hType === 'out' ? '지출 ' : '';
+    if (!shown.length) { $('historyList').innerHTML = emptyHTML(dayFilter ? `이 날은 ${what}기록이 없어요.` : `이 달 ${esc(catFilter || '')} ${what}기록이 없어요.`.replace(/\s+/g, ' '), 'i-ledger'); return; }
+    $('historyList').innerHTML = dayGroupsHTML(shown);
   }
   // ---------- 달력: 토 파랑 · 일/공휴일 빨강 · 날짜별 지출 · 자동이체 날 ----------
   let dayFilter = null;
@@ -486,7 +524,7 @@
   function setupStatic() {
     $('askChips').innerHTML = CHIPS.map((c) => `<button>${esc(c)}</button>`).join('');
     $('fCategory').innerHTML = CATS.map((c) => `<option value="${c}">${esc(c)}</option>`).join('');
-    $('verLine').innerHTML = '<span class="nw">오늘 얼마 썼어? v1.0.1</span> <span class="nw">· Developed by SEOKWOO KIM</span>' + (IS_PREVIEW ? ' <span class="nw">· 미리보기 (기록은 이 화면에만 저장)</span>' : '');
+    $('verLine').innerHTML = '<span class="nw">오늘 얼마 썼어? v1.0.2</span> <span class="nw">· Developed by SEOKWOO KIM</span>' + (IS_PREVIEW ? ' <span class="nw">· 미리보기 (기록은 이 화면에만 저장)</span>' : '');
     $('sCurrency').innerHTML = Object.entries(CURRENCIES).map(([c, l]) => `<option value="${c}">${esc(l)}</option>`).join('');
     applyCurrencyUI();
   }
@@ -861,17 +899,18 @@
     $('askInput').value = text;
     const q = P.parseQuery(text);
     const pr = periodRange(q.period);
-    let list = records.filter((r) => (!q.type || r.type === q.type) && P.recordMatches(r, q.keywords));
+    const groups = q.groups || [];
+    let list = records.filter((r) => (!q.type || r.type === q.type) && P.recordMatches(r, q.keywords, groups));
     if (pr) list = list.filter((r) => r.ts >= +pr.r[0] && r.ts < +pr.r[1]);
     // 모든 단어가 맞는 기록이 없으면, 가장 많이 맞는 기록으로 찾기 (언제·어디 질문만)
     let partial = false;
-    if (!list.length && q.intent === 'list' && q.keywords.length > 1) {
+    if (!list.length && q.intent === 'list' && q.keywords.length + groups.length > 1) {
       let pool = records.filter((r) => !q.type || r.type === q.type);
       if (pr) pool = pool.filter((r) => r.ts >= +pr.r[0] && r.ts < +pr.r[1]);
-      const best = Math.max(0, ...pool.map((r) => P.matchCount(r, q.keywords)));
-      if (best > 0) { list = pool.filter((r) => P.matchCount(r, q.keywords) === best); partial = true; }
+      const best = Math.max(0, ...pool.map((r) => P.matchCount(r, q.keywords, groups)));
+      if (best > 0) { list = pool.filter((r) => P.matchCount(r, q.keywords, groups) === best); partial = true; }
     }
-    const kw = q.keywords.join(' ');
+    const kw = [...groups.map(P.groupLabel), ...q.keywords].join(' ');
     const typeWord = (q.type === 'in' ? '입금' : q.type === 'out' ? '지출' : '기록');
     const fD = fmtDate, fT = fmtTime;
     let html = '';

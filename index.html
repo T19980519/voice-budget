@@ -194,6 +194,14 @@ section[data-page]{display:none} section[data-page].on{display:block}
 .monthbar button{border:1px solid var(--line);background:var(--card);border-radius:12px;width:42px;height:38px;display:grid;place-items:center}
 .monthbar b{font-size:20px}
 .note{font-size:13px;color:var(--muted)}
+.chips button.on{background:var(--ink);color:var(--card);border-color:var(--ink);font-weight:700}
+.mic.search{padding:4px 6px 4px 12px;min-height:44px}
+.mic.search svg.i{width:18px;height:18px;color:var(--muted);flex:none}
+.mic.search input::-webkit-search-cancel-button{display:none}
+.mic.search .clr{border:0;background:var(--field);color:var(--muted);border-radius:999px;width:30px;height:30px;flex:none;font-size:13px}
+.searchsum{display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:12px 0 4px;border-bottom:1px solid var(--line)}
+.searchsum b{font-size:15px}
+
 .confirm{position:fixed;inset:0;background:rgba(5,12,9,.45);display:grid;place-items:center;z-index:70;padding:24px}
 .cbox{background:var(--card);border-radius:20px;padding:18px;width:100%;max-width:340px}
 .cbox p{margin:4px 2px 14px;font-size:16px}
@@ -312,7 +320,8 @@ section[data-page]{display:none} section[data-page].on{display:block}
   <symbol id="i-sheet" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M4 9h16M4 15h16M10 3v18"/></symbol>
   <symbol id="i-won" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M7.6 8l1.9 8 2.5-6.2 2.5 6.2 1.9-8M6.6 11.3h10.8M6.6 13.6h10.8"/></symbol>
   <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></symbol>
-  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20.5a2 2 0 0 0 4 0"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 16l4.5 4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+<symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20.5a2 2 0 0 0 4 0"/></symbol>
 </svg>
 
 <div class="wrap">
@@ -370,7 +379,15 @@ section[data-page]{display:none} section[data-page].on{display:block}
       <b id="mLabel"></b>
       <button id="mNext" aria-label="다음 달"><svg class="i"><use href="#i-chev-r"/></svg></button>
     </div>
-    <div class="card pad">
+    <div class="card pad" id="searchCard">
+      <div class="mic search">
+        <svg class="i"><use href="#i-search"/></svg>
+        <input id="hSearch" type="search" placeholder="검색 — 가게·물건·금액·배달 음식" enterkeyhint="search" autocomplete="off">
+        <button id="hClear" class="clr" aria-label="검색 지우기" hidden>✕</button>
+      </div>
+      <div class="chips" id="hType"><button data-t="" class="on">전체</button><button data-t="out">지출만</button><button data-t="in">입금만</button></div>
+    </div>
+    <div class="card pad" id="monthCard">
       <div class="trio" style="margin-top:0">
         <div><small>월 입금</small><b class="num in" id="mIn"></b></div>
         <div><small>월 지출</small><b class="num out" id="mOut"></b></div>
@@ -411,6 +428,7 @@ section[data-page]{display:none} section[data-page].on{display:block}
         <button>내가 언제 베스트바이에서 배터리를 얼마에 샀지?</button>
         <button>이번주 지출 총 얼마야?</button>
         <button>오늘 식비 얼마 썼어?</button>
+        <button>이번달 배달 음식 얼마 썼어?</button>
         <button>이번달 주거 지출은 총 얼마야?</button>
         <button>남은 금액 얼마야?</button>
         <button>이번달 예산 얼마 남았어?</button>
@@ -504,7 +522,7 @@ section[data-page]{display:none} section[data-page].on{display:block}
     </div>
   </section>
 
-  <p class="ver" id="verLine"><span class="nw">오늘 얼마 썼어? v1.0.1</span> <span class="nw">· Developed by SEOKWOO KIM</span></p>
+  <p class="ver" id="verLine"><span class="nw">오늘 얼마 썼어? v1.0.2</span> <span class="nw">· Developed by SEOKWOO KIM</span></p>
 </div>
 
 <nav class="tabs" id="tabs">
