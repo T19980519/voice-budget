@@ -1,4 +1,4 @@
-/* 오늘 얼마 썼어? v0.9.8 · Developed by SEOKWOO KIM — 모든 데이터는 이 폰(localStorage)에만 저장 */
+/* 오늘 얼마 썼어? v0.9.9 · Developed by SEOKWOO KIM — 모든 데이터는 이 폰(localStorage)에만 저장 */
 (function () {
   'use strict';
   const P = window.VBParser;
@@ -39,6 +39,8 @@
   for (const r of allRecords) if (!r.cur) r.cur = 'CAD';
   let records = allRecords.filter((r) => r.cur === settings.currency);   // 지금 통화의 기록만 화면·합계에 사용
   P.setCurrency(settings.currency);
+  const H = window.Holidays;   // 나라별 공휴일 (통화로 나라를 정함)
+  H.setCurrency(settings.currency);
   // ---------- 급여 (격주 / 매주 / 매달 N일 / 없음) ----------
   if (!settings.payCycle) {
     if (!settingsRaw && settings.currency === 'KRW') Object.assign(settings, { payCycle: 'monthly', payDay: 25, payName: '월급', payTime: '09:00' });
@@ -303,26 +305,24 @@
     return paydayAt(new Date(y, mo, d));
   }
   /** now 기준: 가장 최근 지급일(이미 지난)과 다음 지급일 */
+  /** now 기준: 가장 최근 지급일(이미 지난)과 다음 지급일. 주말·공휴일이면 앞 영업일로 앞당김 */
   function payInfo(now = new Date()) {
     const cyc = settings.payCycle;
     if (cyc === 'none') return { last: null, next: null, todayBefore: false };
-    if (cyc === 'monthly') {
-      let cand = monthPayday(now.getFullYear(), now.getMonth()), todayBefore = false;
-      if (now < cand) { todayBefore = dkey(cand) === dkey(now); cand = monthPayday(now.getFullYear(), now.getMonth() - 1); }
-      const next = monthPayday(cand.getFullYear(), cand.getMonth() + 1);
-      return { last: cand, next, todayBefore };
+    const shift = (d) => paydayAt(H.prevBizDay(d));
+    const cands = [];
+    if (cyc === 'monthly') { for (let k = -2; k <= 2; k++) cands.push(shift(monthPayday(now.getFullYear(), now.getMonth() + k))); }
+    else {
+      const step = cyc === 'weekly' ? 7 : 14;
+      const [y, mo, da] = settings.firstPay.split('-').map(Number);
+      const first = sod(new Date(y, mo - 1, da));
+      const n = Math.floor(Math.floor((sod(now) - first) / 864e5) / step);
+      for (let k = n - 2; k <= n + 2; k++) if (k >= 0) cands.push(shift(addDays(first, k * step)));
     }
-    const step = cyc === 'weekly' ? 7 : 14;
-    const [y, mo, da] = settings.firstPay.split('-').map(Number);
-    const first = paydayAt(new Date(y, mo - 1, da));
-    const days = Math.floor((sod(now) - sod(first)) / 864e5);
-    if (days < 0) return { last: null, next: first, todayBefore: false };
-    let n = Math.floor(days / step);
-    let cand = paydayAt(addDays(sod(first), n * step));
-    let todayBefore = false;
-    if (now < cand) { todayBefore = dkey(cand) === dkey(now); n--; cand = n >= 0 ? paydayAt(addDays(sod(first), n * step)) : null; }
-    const next = paydayAt(addDays(sod(first), (n + 1) * step));
-    return { last: cand, next, todayBefore };
+    cands.sort((a, b) => a - b);
+    const last = cands.filter((d) => d <= now).pop() || null;
+    const next = cands.find((d) => d > now) || null;
+    return { last, next, todayBefore: !!(next && dkey(next) === dkey(now)) };
   }
   const cycleText = () => ({ biweekly: '2주마다', weekly: '매주', monthly: settings.payDay > 0 ? `매달 ${settings.payDay}일` : '매달 말일', none: '' })[settings.payCycle];
   // 급여를 이미 넣었는지: 배너로 넣은 기록, 또는 지급일~3일 뒤 사이에 말로 넣은 수입 기록
@@ -346,8 +346,8 @@
 
   // ---------- 기록 ----------
   let viewMonth = som(new Date());
-  $('mPrev').onclick = () => { catFilter = null; viewMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() - 1, 1); renderHistory(); };
-  $('mNext').onclick = () => { catFilter = null; viewMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 1); renderHistory(); };
+  $('mPrev').onclick = () => { catFilter = null; dayFilter = null; viewMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() - 1, 1); renderHistory(); };
+  $('mNext').onclick = () => { catFilter = null; dayFilter = null; viewMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 1); renderHistory(); };
   function monthRecords(m) { const s = som(m), e = new Date(s.getFullYear(), s.getMonth() + 1, 1); return records.filter((r) => r.ts >= +s && r.ts < +e); }
   function renderHistory() {
     $('mLabel').textContent = T('{y}년 {m}월', { y: viewMonth.getFullYear(), m: viewMonth.getMonth() + 1, });
@@ -356,20 +356,63 @@
     const short = moneyShort;
     $('mIn').textContent = short(t.inn); $('mOut').textContent = short(t.out); $('mNet').textContent = short(t.net);
     renderCharts(list);
+    renderCalendar(list);
     if (!list.length) { $('historyList').innerHTML = emptyHTML(T('이 달에는 기록이 없어요.'), 'i-ledger'); return; }
-    const shown = catFilter ? list.filter((r) => (r.category || '기타') === catFilter) : list;
+    const shown = list.filter((r) => (!catFilter || (r.category || '기타') === catFilter) && (!dayFilter || dkey(new Date(r.ts)) === dayFilter));
     document.querySelectorAll('#catChart .cbar').forEach((b) => b.classList.toggle('sel', b.dataset.cat === catFilter));
     $('catTip').innerHTML = catFilter ? `<b>${esc(catFilter)}</b> 기록만 보여주는 중 · 막대를 다시 누르면 전체` : '막대를 누르면 그 카테고리 기록만 볼 수 있어요';
-    if (!shown.length) { $('historyList').innerHTML = emptyHTML(`이 달 ${esc(catFilter)} 기록이 없어요.`, 'i-ledger'); return; }
+    if (!shown.length) { $('historyList').innerHTML = emptyHTML(dayFilter ? '이 날은 기록이 없어요.' : `이 달 ${esc(catFilter)} 기록이 없어요.`, 'i-ledger'); return; }
     const groups = new Map();
     for (const r of shown.slice().reverse()) { const k = dkey(new Date(r.ts)); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(r); }
     let html = '';
     for (const [k, rs] of groups) {
       const out = rs.filter((r) => r.type === 'out').reduce((s, r) => s + r.amount, 0);
-      html += `<div class="dayhead"><span>${fmtDate(new Date(rs[0].ts))}</span><span class="num">${T('지출 {amt}', { amt: money(out) })}</span></div>` + rs.map((r) => rowHTML(r, false)).join('');
+      const hd = new Date(rs[0].ts), hol = H.get(hd);
+      html += `<div class="dayhead"><span class="${H.dayClass(hd)}">${fmtDate(hd)}${hol ? ' · ' + esc(hol.name) : ''}</span><span class="num">${T('지출 {amt}', { amt: money(out) })}</span></div>` + rs.map((r) => rowHTML(r, false)).join('');
     }
     $('historyList').innerHTML = html;
   }
+  // ---------- 달력: 토 파랑 · 일/공휴일 빨강 · 날짜별 지출 · 자동이체 날 ----------
+  let dayFilter = null;
+  function renderCalendar(list) {
+    const y = viewMonth.getFullYear(), m = viewMonth.getMonth();
+    const first = new Date(y, m, 1), days = new Date(y, m + 1, 0).getDate(), today = dkey(new Date());
+    const spent = {}, earned = {};
+    for (const r of list) { const k = dkey(new Date(r.ts)); if (r.type === 'out') spent[k] = (spent[k] || 0) + r.amount; else earned[k] = (earned[k] || 0) + r.amount; }
+    const fx = {};   // 이 달 자동이체 나가는 날 (휴일이면 미룬 날)
+    for (const f of myFixed()) {
+      if (mkey(y, m) < f.start) continue;
+      const d = fixedDay(f, y, m); if (d.getMonth() !== m) continue;
+      (fx[dkey(d)] = fx[dkey(d)] || []).push(f.name + (fixedMoved(f, y, m) ? ` (${f.day > 0 ? f.day + '일' : '말일'} → 휴일이라 미룸)` : ''));
+    }
+    const pi = payInfo(new Date(y, m + 1, 0, 23, 59));
+    const payDays = new Set([pi.last, pi.next].filter(Boolean).map(dkey));
+    let html = ['일', '월', '화', '수', '목', '금', '토'].map((w, i) => `<span class="cw ${i === 0 ? 'sun' : i === 6 ? 'sat' : ''}">${w}</span>`).join('');
+    for (let i = 0; i < first.getDay(); i++) html += '<span></span>';
+    for (let d = 1; d <= days; d++) {
+      const dt = new Date(y, m, d), k = dkey(dt), hol = H.get(dt);
+      const cls = ['cd', H.dayClass(dt), k === today ? 'today' : '', k === dayFilter ? 'sel' : ''].join(' ');
+      const tip = [hol ? hol.name + (hol.note ? ` (${hol.note})` : '') : '', ...(fx[k] || []).map((n) => '자동이체 ' + n), payDays.has(k) ? payName() : ''].filter(Boolean).join(', ');
+      html += `<button class="${cls}" data-day="${k}" aria-label="${m + 1}월 ${d}일${tip ? ' ' + esc(tip) : ''}${spent[k] ? ' 지출 ' + money(spent[k]) : ''}">
+        <span class="dn">${d}</span>${hol ? `<span class="hn">${esc(hol.name.replace(/ \(대체\)$/, ''))}</span>` : ''}
+        ${spent[k] ? `<span class="sp num">${moneyTick(spent[k])}</span>` : ''}
+        <span class="mk">${fx[k] ? '<i class="m-fx"></i>' : ''}${earned[k] || payDays.has(k) ? '<i class="m-in"></i>' : ''}</span></button>`;
+    }
+    $('calGrid').innerHTML = html;
+    $('calCountry').textContent = H.countryName() + ' 공휴일';
+    if (dayFilter) {
+      const dt = new Date(dayFilter + 'T12:00'), hol = H.get(dt);
+      const bits = [hol ? hol.name + (hol.note ? ` (${hol.note})` : hol.bank ? ' · 은행 휴무' : '') : '', ...(fx[dayFilter] || []).map((n) => '자동이체 ' + n), payDays.has(dayFilter) ? payName() + ' 입금일' : ''].filter(Boolean);
+      $('calTip').innerHTML = `<b class="${H.dayClass(dt)}">${fmtDate(dt)}</b>${bits.length ? ' · ' + esc(bits.join(' · ')) : ''} — 이 날 기록만 보는 중 · 다시 누르면 전체`;
+    } else $('calTip').innerHTML = '<span class="lg"><i class="m-fx"></i>자동이체</span><span class="lg"><i class="m-in"></i>입금</span><span class="lg"><b class="sat">토</b> <b class="sun">일·공휴일</b></span> · 날짜를 누르면 그날 기록';
+  }
+  $('calGrid').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-day]'); if (!b) return;
+    dayFilter = dayFilter === b.dataset.day ? null : b.dataset.day;
+    renderHistory();
+    if (dayFilter) setTimeout(() => $('historyList').scrollIntoView({ block: 'start', behavior: 'smooth' }), 30);
+  });
+
   // ---------- 차트: 카테고리별(지난달 비교) + 최근 6개월 ----------
   const catSums = (list) => { const m = {}; for (const r of list) if (r.type === 'out') m[r.category || '기타'] = (m[r.category || '기타'] || 0) + r.amount; return m; };
   function renderCharts(list) {
@@ -443,7 +486,7 @@
   function setupStatic() {
     $('askChips').innerHTML = CHIPS.map((c) => `<button>${esc(c)}</button>`).join('');
     $('fCategory').innerHTML = CATS.map((c) => `<option value="${c}">${esc(c)}</option>`).join('');
-    $('verLine').innerHTML = '<span class="nw">오늘 얼마 썼어? v0.9.8</span> <span class="nw">· Developed by SEOKWOO KIM</span>' + (IS_PREVIEW ? ' <span class="nw">· 미리보기 (기록은 이 화면에만 저장)</span>' : '');
+    $('verLine').innerHTML = '<span class="nw">오늘 얼마 썼어? v0.9.9</span> <span class="nw">· Developed by SEOKWOO KIM</span>' + (IS_PREVIEW ? ' <span class="nw">· 미리보기 (기록은 이 화면에만 저장)</span>' : '');
     $('sCurrency').innerHTML = Object.entries(CURRENCIES).map(([c, l]) => `<option value="${c}">${esc(l)}</option>`).join('');
     applyCurrencyUI();
   }
@@ -464,7 +507,7 @@
     settings.currency = c;
     settings.budgets = settings.budgetsByCur[c] || {};
     save(KEY_SET, settings);
-    P.setCurrency(c);
+    P.setCurrency(c); H.setCurrency(c);
     records = allRecords.filter((r) => r.cur === c);
     applyCurrencyUI(); render(); renderSettings();
     const other = allRecords.length - records.length;
@@ -475,7 +518,10 @@
   // settings.fixed = [{ id, name, amount, day(1~31, 0=말일), mode:'auto'|'confirm', category, cur, start:'YYYY-MM', done:['YYYY-MM',…] }]
   if (!Array.isArray(settings.fixed)) settings.fixed = [];
   const mkey = (y, m) => { const d = new Date(y, m, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
-  const fixedDay = (f, y, m) => { const last = new Date(y, m + 1, 0).getDate(); return new Date(y, m, f.day > 0 ? Math.min(f.day, last) : last, 9, 0, 0); };
+  const fixedPlan = (f, y, m) => { const last = new Date(y, m + 1, 0).getDate(); return new Date(y, m, f.day > 0 ? Math.min(f.day, last) : last, 9, 0, 0); };
+  /** 실제로 빠져나가는 날: 주말·은행 휴무 공휴일이면 다음 영업일 */
+  const fixedDay = (f, y, m) => { const d = H.nextBizDay(fixedPlan(f, y, m)); d.setHours(9, 0, 0, 0); return d; };
+  const fixedMoved = (f, y, m) => dkey(fixedPlan(f, y, m)) !== dkey(fixedDay(f, y, m));
   const myFixed = () => settings.fixed.filter((f) => f.cur === settings.currency);
   const dayText = (f) => (f.day > 0 ? `매달 ${f.day}일` : '매달 말일');
   /** 날짜가 된(지난) 달 중 아직 처리 안 한 것 [{f, month, due}] — 오래 안 열었어도 항목마다 최대 12달 */
@@ -528,7 +574,8 @@
     const total = list.reduce((a, f) => a + f.amount, 0);
     const upcoming = list.map((f) => ({ f, due: fixedDay(f, y, m) })).concat(list.map((f) => ({ f, due: fixedDay(f, y, m + 1) })))
       .filter((x) => x.due > now && mkey(x.due.getFullYear(), x.due.getMonth()) >= x.f.start).sort((a, b) => a.due - b.due)[0];
-    html += `<button class="fxline" data-go-fixed><span class="ic">${icon('i-cal')}</span><span class="t">매달 고정지출 <b class="num">${money(total)}</b> · ${list.length}건${upcoming ? `<small>다음: ${upcoming.due.getMonth() + 1}월 ${upcoming.due.getDate()}일 ${esc(upcoming.f.name)} ${upcoming.f.mode === 'confirm' ? '(금액 확인)' : money(upcoming.f.amount)}</small>` : ''}</span>${icon('i-chev-r')}</button>`;
+    const moved = upcoming && fixedMoved(upcoming.f, upcoming.due.getFullYear(), upcoming.due.getMonth()) ? ' · 휴일이라 미룸' : '';
+    html += `<button class="fxline" data-go-fixed><span class="ic">${icon('i-cal')}</span><span class="t">매달 고정지출 <b class="num">${money(total)}</b> · ${list.length}건${upcoming ? `<small>다음: <span class="${H.dayClass(upcoming.due)}">${upcoming.due.getMonth() + 1}월 ${upcoming.due.getDate()}일 (${DOWx(upcoming.due.getDay())})</span> ${esc(upcoming.f.name)} ${upcoming.f.mode === 'confirm' ? '(금액 확인)' : money(upcoming.f.amount)}${moved}</small>` : ''}</span>${icon('i-chev-r')}</button>`;
     box.innerHTML = html;
   }
   document.addEventListener('click', (e) => {
@@ -1091,7 +1138,7 @@
       if (!CURRENCIES[settings.currency]) settings.currency = 'CAD';
       if (!settings.budgets || typeof settings.budgets !== 'object') settings.budgets = {};
       allRecords = data.records.map((r) => (r.cur ? r : Object.assign(r, { cur: 'CAD' })));
-      P.setCurrency(settings.currency);
+      P.setCurrency(settings.currency); H.setCurrency(settings.currency);
       records = allRecords.filter((r) => r.cur === settings.currency); applyCurrencyUI();
       save(KEY_SET, settings); saveRecords();
       if (data.learn && typeof data.learn === 'object') { for (const k of ['words', 'cats', 'phrases']) learn[k] = data.learn[k] || {}; saveLearn(); }

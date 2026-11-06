@@ -258,6 +258,24 @@ section[data-page]{display:none} section[data-page].on{display:block}
 .fxrow{width:100%;border-left:0;border-right:0;border-top:0;background:none;text-align:left}
 .fxrow .desc b{color:var(--ink)}
 .fxform{border-top:1px solid var(--line);padding-top:6px;margin-bottom:10px}
+/* 달력 · 주말/공휴일 색 */
+:root{--sat:#2456c9;--sun:#c8323a}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){--sat:#86a8ff;--sun:#ff8f87} }
+:root[data-theme="dark"]{--sat:#86a8ff;--sun:#ff8f87}
+.sat{color:var(--sat)!important} .sun{color:var(--sun)!important}
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px;margin-top:6px}
+.cal .cw{text-align:center;font-size:12px;font-weight:700;color:var(--muted);padding:2px 0 4px}
+.cal .cd{position:relative;display:flex;flex-direction:column;align-items:center;gap:0;min-height:58px;padding:4px 1px 3px;border:1px solid transparent;border-radius:10px;background:var(--field);min-width:0;overflow:hidden}
+.cal .cd .dn{font-size:14px;font-weight:700;line-height:1.2;color:var(--ink)}
+.cal .cd.sat .dn{color:var(--sat)} .cal .cd.sun .dn{color:var(--sun)}
+.cal .cd .hn{font-size:9px;line-height:1.15;color:var(--sun);max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 2px}
+.cal .cd .sp{font-size:10.5px;line-height:1.3;color:var(--out);font-weight:600;margin-top:auto}
+.cal .cd .mk{display:flex;gap:3px;height:6px;margin-top:2px}
+.cal .cd.today{border-color:var(--gold)}
+.cal .cd.sel{background:var(--accent)} .cal .cd.sel .dn,.cal .cd.sel .sp,.cal .cd.sel .hn{color:var(--accent-ink)!important}
+.cal i.m-fx,.tip i.m-fx{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--gold)}
+.cal i.m-in,.tip i.m-in{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--in)}
+.tip .lg{display:inline-flex;align-items:center;gap:4px;margin-right:10px}
 [hidden]{display:none!important}
 </style>
 </head>
@@ -356,6 +374,11 @@ section[data-page]{display:none} section[data-page].on{display:block}
       </div>
       <button class="btn ghost" id="btnExcel" style="margin-top:12px"><svg class="i"><use href="#i-sheet"/></svg><span>이 달 엑셀 파일로 내보내기</span></button>
     </div>
+    <div class="card pad" id="calCard">
+      <div class="cardhead"><b>달력</b><span class="note" id="calCountry"></span></div>
+      <div class="cal" id="calGrid"></div>
+      <div class="tip" id="calTip"></div>
+    </div>
     <div class="card pad" id="chartCard">
       <div class="cardhead"><b>카테고리별 지출</b><span class="note" id="chartTotal"></span></div>
       <div class="legend"><span><i></i>이 달</span><span><u></u>지난달</span></div>
@@ -408,6 +431,7 @@ section[data-page]{display:none} section[data-page].on{display:block}
           <label class="field"><span>기록 방식</span><select id="fxMode"><option value="auto">자동 기록 (금액이 매달 같음)</option><option value="confirm">금액 확인 후 기록 (매달 다름)</option></select></label>
           <label class="field"><span>카테고리</span><select id="fxCategory"><option value="커피">커피</option><option value="식비">식비</option><option value="장보기">장보기</option><option value="교통">교통</option><option value="전자제품">전자제품</option><option value="생활용품">생활용품</option><option value="쇼핑">쇼핑</option><option value="통신/구독">통신/구독</option><option value="주거">주거</option><option value="의료">의료</option><option value="여가">여가</option><option value="교육">교육</option><option value="선물/경조사">선물/경조사</option><option value="기타">기타</option></select></label>
         </div>
+        <p class="note" style="margin:0 2px 6px">주말이나 은행이 쉬는 공휴일이면 다음 영업일에 기록돼요.</p>
         <input type="hidden" id="fxCatAuto" value="1">
         <div class="grid2" style="margin-top:6px"><button class="btn ghost" id="fxCancel">취소</button><button class="btn" id="fxSave">저장</button></div>
         <button class="btn danger" id="fxDelete" hidden style="margin-top:8px">이 고정지출 지우기</button>
@@ -475,7 +499,7 @@ section[data-page]{display:none} section[data-page].on{display:block}
     </div>
   </section>
 
-  <p class="ver" id="verLine"><span class="nw">오늘 얼마 썼어? v0.9.8</span> <span class="nw">· Developed by SEOKWOO KIM</span></p>
+  <p class="ver" id="verLine"><span class="nw">오늘 얼마 썼어? v0.9.9</span> <span class="nw">· Developed by SEOKWOO KIM</span></p>
 </div>
 
 <nav class="tabs" id="tabs">
@@ -531,6 +555,7 @@ section[data-page]{display:none} section[data-page].on{display:block}
 
 <div class="toast" id="toast"></div>
 
+<script src="holidays.js"></script>
 <script src="parser.js"></script>
 <script src="app.js"></script>
 </body>

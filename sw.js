@@ -1,6 +1,6 @@
 /* 오늘 얼마 썼어? 서비스 워커 — 오프라인 실행 + 알림 클릭 처리 */
-const CACHE = 'voice-budget-v0.9.8';
-const FILES = ['./', './index.html', './intro.html', './app.js', './parser.js', './manifest.webmanifest',
+const CACHE = 'voice-budget-v0.9.9';
+const FILES = ['./', './index.html', './intro.html', './app.js', './holidays.js', './parser.js', './manifest.webmanifest',
   './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png', './lib/xlsx.full.min.js'];
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES))); self.skipWaiting(); });
 self.addEventListener('activate', (e) => {
